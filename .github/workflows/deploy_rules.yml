@@ -4,8 +4,8 @@ on: # yamllint disable-line rule:truthy
   workflow_dispatch:
 
 
-env:
-  CONFIG_FILE: deployment-config.yaml
+# env:
+#   CONFIG_FILE: deployment-config.yaml
 
 jobs:
   initialize:
