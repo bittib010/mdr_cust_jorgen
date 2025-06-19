@@ -20,8 +20,8 @@ jobs:
       - name: Checkout mdr_root repository
         uses: actions/checkout@v4  
         with:
-          repository: bittib010/mdr_root
-          token: ${{ secrets.ACCESS_TOKEN }}
+          repository: mdr_root
+          token: ${{ secrets.GITHUB_TOKEN }}
       # TODO: create this way of getting token in future. better for orgs.
       # - name: Generate GitHub App Token
       #   id: app-token
