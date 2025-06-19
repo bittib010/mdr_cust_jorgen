@@ -23,8 +23,8 @@ jobs:
           repository: bittib010/mdr_root
           token: ${{ secrets.PAT_TOKEN }}
           path: mdr_root
-
-
+      - name: Print mdr_root folder location
+        run: echo "mdr_root is located at: ${{ github.workspace }}/mdr_root"
 
       # Checkout current repository
       - name: Checkout repository
@@ -65,7 +65,7 @@ jobs:
           Get-ChildItem -Path "mdr_root/artifacts" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }
           Write-Output "Current working directory: $(Get-Location)"
           # List current directory contents
-          Write-Output "Listing files in current directory: $(Get-ChildItem -Path '../..')"
+          Write-Output "Listing files in current directory: $(Get-ChildItem -Path '${{ github.workspace }}/mdr_root')"
 
 
       # - name: Import scripts
