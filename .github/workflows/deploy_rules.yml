@@ -73,78 +73,26 @@ jobs:
       #   run: |
       #     . ./scripts/Merge-ContentTemplates.ps1
 
-      # - name: Extract and Print Inputs
-      #   id: extract
-      #   shell: pwsh
-      #   run: |
-      #     # Get github inputs
-      #     $inputs_json = '${{ toJson(github.event.inputs) }}'
-      #     Write-Output "Inputs JSON: $inputs_json"
+      - name: Generate list of YAML rule files
+        id: generate-yaml-rules
+        shell: pwsh
+        run: |
+            # Define the artifacts folder in the checked out mdr_root repository.
+            $artifactPath = Join-Path $env:GITHUB_WORKSPACE "mdr_root/artifacts"
+            
+            if (-not (Test-Path $artifactPath)) {
+            Write-Error "Artifacts folder not found: $artifactPath"
+            exit 1
+              }
 
-      #     # Convert JSON to Powershell object
-      #     $parsed = $inputs_json | ConvertFrom-Json
-
-      #     # Store AllCustomers to variable
-      #     $all_customers = $parsed.AllCustomers
-
-      #     # Check if AllCustomers is true and no specific customers are selected
-      #     $selected_customers = ($parsed.PSObject.Properties | Where-Object { $_.Name -ne "AllCustomers" -and $_.Value -eq $true } | Select-Object -ExpandProperty Name) -join ','
-
-      #     # Create a list of all customer keys
-      #     $all_customer_keys = ($parsed.PSObject.Properties | Where-Object { $_.Name -ne "AllCustomers" } | Select-Object -ExpandProperty Name) -join ','
-
-      #     if ($all_customers -eq $true -and [string]::IsNullOrEmpty($selected_customers)) {
-      #         Write-Output "AllCustomers is true and no specific customers selected."
-      #         $selected_customers = $all_customer_keys
-      #     } elseif ($all_customers -eq $true -and -not [string]::IsNullOrEmpty($selected_customers)) {
-      #         Write-Error "Error: AllCustomers cannot be true with specific customers selected: $selected_customers"
-      #         exit 1
-      #     } elseif ([string]::IsNullOrEmpty($selected_customers)) {
-      #         Write-Error "Error: At least one customer must be selected."
-      #         exit 1
-      #     } else {
-      #         Write-Output "Selected specific customers: $selected_customers"
-      #     }
-      #     "selected_customers=$selected_customers" | Out-File -FilePath $env:GITHUB_ENV -Append
-      #     # Set the output correctly using the new recommended method
-      #     Write-Output "selected_customers=$selected_customers" >> $env:GITHUB_OUTPUT
-      #     # Optional way to set output
-
-      #     "selected_customers2=$selected_customers" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
-      #     Write-Output "printing selected customers - ${$selected_customers}"
-
-      # - name: Generate list of rule paths
-      #   id: generate-rules
-      #   shell: pwsh
-      #   run: |
-      #     # Converted from bash to PowerShell
-      #     $selected_customers = "${{ steps.extract.outputs.selected_customers }}"
-      #     Write-Output "Selected customers: $selected_customers"
-      #     $customers = $selected_customers -split ','
-      #     foreach ($customer in $customers) {
-      #         Write-Output "Finding Paths for customer - $customer"
-      #         Write-Output "Working directory - $(Get-Location)"
-      #         Write-Output "Listing files - $(Get-ChildItem)"
-      #         $scriptPath = Join-Path $env:GITHUB_WORKSPACE "modules/MDR/Private/Get-RulePaths.ps1"
-      #         if (-not (Test-Path $scriptPath)) {
-      #             Write-Error "Script file not found: $scriptPath"
-      #             Write-Output "Listing content of $(Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private'):"
-      #             Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private')
-      #             exit 1
-      #         }
-      #         $rule_paths = & $scriptPath -customerName $customer -sharedArtifactsPath "sharedArtifacts/rules" -customerArtifactsPath "customers/$customer" | Out-String
-      #         $rule_paths = $rule_paths -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" -and -not $_.StartsWith("VERBOSE:") }
-      #         "rule_paths_$customer=$($rule_paths -join ',')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-      #         Write-Output "Rule paths for $customer - $($rule_paths -join ', ')"
-      #         # Persist rule paths to artifacts folder
-      #         $artifactsPath = Join-Path $env:GITHUB_WORKSPACE "artifacts"
-      #         if (-not (Test-Path $artifactsPath)) {
-      #           New-Item -ItemType Directory -Force -Path $artifactsPath | Out-Null
-      #         }
-      #         $filePath = Join-Path $artifactsPath "$customer-rule-paths.txt"
-      #         $rule_paths | Out-File -FilePath $filePath -Force
-      #     }
+            Write-Output "Listing all YAML rule files under: $artifactPath"
+            
+            # Recursively find files with names matching pattern y*ml
+            $yamlFiles = Get-ChildItem -Path $artifactPath -Recurse -File | Where-Object { $_.Name -like 'y*ml' }
+            
+            foreach ($file in $yamlFiles) {
+            Write-Output $file.FullName
+            }
 
       # - name: Copy rules to temp folder
       #   shell: pwsh
