@@ -23,8 +23,7 @@ jobs:
           repository: bittib010/mdr_root
           token: ${{ secrets.PAT_TOKEN }}
           path: mdr_root
-      - name: Print mdr_root folder location
-        run: echo "mdr_root is located at: ${{ github.workspace }}/mdr_root"
+
 
       # Checkout current repository
       - name: Checkout repository
