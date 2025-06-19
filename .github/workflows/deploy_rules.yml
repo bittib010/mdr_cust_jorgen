@@ -15,7 +15,7 @@ jobs:
         uses: azure/cli@v2
         with:
           inlineScript: |
-            echo "Azure CLI setup complete."
+            echo "Azure CLI setup complete." 
 
       - name: Generate GitHub App Token
         id: app-token
