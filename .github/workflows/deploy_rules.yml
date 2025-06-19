@@ -78,14 +78,14 @@ jobs:
         shell: pwsh
         run: |
             # Define the artifacts folder in the checked out mdr_root repository.
-            $artifactPath = Join-Path $env:GITHUB_WORKSPACE "mdr_root/artifacts"
+            $artifactPath = Join-Path $env:GITHUB_WORKSPACE "../mdr_root/artifacts"
             
             if (-not (Test-Path $artifactPath)) {
             Write-Error "Artifacts folder not found: $artifactPath"
             exit 1
               }
 
-            Write-Output "Listing all YAML rule files under: $artifactPath"
+            Write-Output "Gathering rule paths under: $artifactPath"
             
             # Recursively find files with names matching pattern y*ml
             $yamlFiles = Get-ChildItem -Path $artifactPath -Recurse -File | Where-Object { $_.Name -like 'y*ml' }
