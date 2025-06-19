@@ -66,6 +66,16 @@ jobs:
           Write-Output "Current working directory: $(Get-Location)"
           Write-Output "Listing files in GITHUB_WORKSPACE: $(Get-ChildItem -Path $env:GITHUB_WORKSPACE)"
 
+          # Find all YAML files from root
+          $yamlFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File | Where-Object { $_.Name -like '*.y*ml' }
+          if ($yamlFiles) { 
+            Write-Output "Found YAML files:"
+            foreach ($file in $yamlFiles) {
+              Write-Output $file.FullName
+            }
+          } else {
+            Write-Output "No YAML files found in the repository."
+          }
 
       # - name: Import scripts
       #   shell: pwsh
