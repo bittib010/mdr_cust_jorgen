@@ -61,7 +61,7 @@ jobs:
       - name: List mdr_root artifacts folder
         shell: pwsh
         run: |
-          $artifactPath = Join-Path $env:GITHUB_WORKSPACE "mdr_root/artifacts"
+          $artifactPath = Join-Path $env:GITHUB_WORKSPACE "mdr_root/mdr_root/artifacts"
           Get-ChildItem -Path $artifactPath -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }
           Write-Output "Current working directory: $(Get-Location)"
           Write-Output "Listing files in GITHUB_WORKSPACE: $(Get-ChildItem -Path $env:GITHUB_WORKSPACE)"
@@ -78,7 +78,7 @@ jobs:
         shell: pwsh
         run: |
             # Define the artifacts folder in the checked out mdr_root repository.
-            $artifactPath = Join-Path $env:GITHUB_WORKSPACE "../mdr_root/artifacts"
+            $artifactPath = Join-Path $env:GITHUB_WORKSPACE "../mdr_root/mdr_root/artifacts"
             
             if (-not (Test-Path $artifactPath)) {
             Write-Error "Artifacts folder not found: $artifactPath"
