@@ -17,7 +17,8 @@ jobs:
           inlineScript: |
             echo "Azure CLI setup complete." 
 
-      - uses: actions/checkout@v4  
+      - name: Checkout mdr_root repository
+        uses: actions/checkout@v4  
         with:
           repository: bittib010/mdr_root
           token: ${{ secrets.ACCESS_TOKEN }}
