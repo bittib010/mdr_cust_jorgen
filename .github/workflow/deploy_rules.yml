@@ -2,21 +2,7 @@ name: Deploy Rules
 
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
-    inputs:
-      # Adding a new customer requires to use the exact same name as the folder name
-      AllCustomers:
-        type: boolean
-        default: true
-      Adrian:
-        type: boolean
-        description: 'Deploy to Adrian'
-        required: false
-        default: false
-      Adrian2:
-        type: boolean
-        description: 'Deploy to Adrian2'
-        required: false
-        default: false
+
 
 env:
   CONFIG_FILE: deployment-config.yaml
@@ -31,15 +17,39 @@ jobs:
           inlineScript: |
             echo "Azure CLI setup complete."
 
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          # TODO: create the SENTINEL_MDR_WRITE_APP_ID and SENTINEL_MDR_WRITE_PRIVATE_KEY secrets
+          # and add them to the repository secrets
+          app-id: ${{ vars.SENTINEL_MDR_WRITE_APP_ID }}
+          private-key: ${{ secrets.SENTINEL_MDR_WRITE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            mdr_root
+
+      # Checkout current repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup PowerShell module cache
-        id: cacher
-        uses: actions/cache@v4
+      # Checkout mdr_root repository
+      - name: Checkout mdr_root repository
+        uses: actions/checkout@v4
         with:
-          path: "modules/MDR/Private/Modules"
-          key: ${{ runner.os }}-SqlServer-PSScriptAnalyzer
+          fetch-depth: 0
+          path: mdr_root
+          persist-credentials: true
+          ref: main
+          repository: mdr_root
+          token: ${{ steps.app-token.outputs.token }}
+
+      # - name: Setup PowerShell module cache
+      #   id: cacher
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: "modules/MDR/Private/Modules"
+      #     key: ${{ runner.os }}-suffix
 
       - name: Install PowerShell Modules
         id: install-modules
@@ -62,213 +72,213 @@ jobs:
             exit 1
           }
 
-      - name: Import scripts
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          . ./scripts/Merge-ContentTemplates.ps1
+      # - name: Import scripts
+      #   shell: pwsh
+      #   continue-on-error: true
+      #   run: |
+      #     . ./scripts/Merge-ContentTemplates.ps1
 
-      - name: Extract and Print Inputs
-        id: extract
-        shell: pwsh
-        run: |
-          # Get github inputs
-          $inputs_json = '${{ toJson(github.event.inputs) }}'
-          Write-Output "Inputs JSON: $inputs_json"
+      # - name: Extract and Print Inputs
+      #   id: extract
+      #   shell: pwsh
+      #   run: |
+      #     # Get github inputs
+      #     $inputs_json = '${{ toJson(github.event.inputs) }}'
+      #     Write-Output "Inputs JSON: $inputs_json"
 
-          # Convert JSON to Powershell object
-          $parsed = $inputs_json | ConvertFrom-Json
+      #     # Convert JSON to Powershell object
+      #     $parsed = $inputs_json | ConvertFrom-Json
 
-          # Store AllCustomers to variable
-          $all_customers = $parsed.AllCustomers
+      #     # Store AllCustomers to variable
+      #     $all_customers = $parsed.AllCustomers
 
-          # Check if AllCustomers is true and no specific customers are selected
-          $selected_customers = ($parsed.PSObject.Properties | Where-Object { $_.Name -ne "AllCustomers" -and $_.Value -eq $true } | Select-Object -ExpandProperty Name) -join ','
+      #     # Check if AllCustomers is true and no specific customers are selected
+      #     $selected_customers = ($parsed.PSObject.Properties | Where-Object { $_.Name -ne "AllCustomers" -and $_.Value -eq $true } | Select-Object -ExpandProperty Name) -join ','
 
-          # Create a list of all customer keys
-          $all_customer_keys = ($parsed.PSObject.Properties | Where-Object { $_.Name -ne "AllCustomers" } | Select-Object -ExpandProperty Name) -join ','
+      #     # Create a list of all customer keys
+      #     $all_customer_keys = ($parsed.PSObject.Properties | Where-Object { $_.Name -ne "AllCustomers" } | Select-Object -ExpandProperty Name) -join ','
 
-          if ($all_customers -eq $true -and [string]::IsNullOrEmpty($selected_customers)) {
-              Write-Output "AllCustomers is true and no specific customers selected."
-              $selected_customers = $all_customer_keys
-          } elseif ($all_customers -eq $true -and -not [string]::IsNullOrEmpty($selected_customers)) {
-              Write-Error "Error: AllCustomers cannot be true with specific customers selected: $selected_customers"
-              exit 1
-          } elseif ([string]::IsNullOrEmpty($selected_customers)) {
-              Write-Error "Error: At least one customer must be selected."
-              exit 1
-          } else {
-              Write-Output "Selected specific customers: $selected_customers"
-          }
-          "selected_customers=$selected_customers" | Out-File -FilePath $env:GITHUB_ENV -Append
-          # Set the output correctly using the new recommended method
-          Write-Output "selected_customers=$selected_customers" >> $env:GITHUB_OUTPUT
-          # Optional way to set output
+      #     if ($all_customers -eq $true -and [string]::IsNullOrEmpty($selected_customers)) {
+      #         Write-Output "AllCustomers is true and no specific customers selected."
+      #         $selected_customers = $all_customer_keys
+      #     } elseif ($all_customers -eq $true -and -not [string]::IsNullOrEmpty($selected_customers)) {
+      #         Write-Error "Error: AllCustomers cannot be true with specific customers selected: $selected_customers"
+      #         exit 1
+      #     } elseif ([string]::IsNullOrEmpty($selected_customers)) {
+      #         Write-Error "Error: At least one customer must be selected."
+      #         exit 1
+      #     } else {
+      #         Write-Output "Selected specific customers: $selected_customers"
+      #     }
+      #     "selected_customers=$selected_customers" | Out-File -FilePath $env:GITHUB_ENV -Append
+      #     # Set the output correctly using the new recommended method
+      #     Write-Output "selected_customers=$selected_customers" >> $env:GITHUB_OUTPUT
+      #     # Optional way to set output
 
-          "selected_customers2=$selected_customers" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      #     "selected_customers2=$selected_customers" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-          Write-Output "printing selected customers - ${$selected_customers}"
+      #     Write-Output "printing selected customers - ${$selected_customers}"
 
-      - name: Generate list of rule paths
-        id: generate-rules
-        shell: pwsh
-        run: |
-          # Converted from bash to PowerShell
-          $selected_customers = "${{ steps.extract.outputs.selected_customers }}"
-          Write-Output "Selected customers: $selected_customers"
-          $customers = $selected_customers -split ','
-          foreach ($customer in $customers) {
-              Write-Output "Finding Paths for customer - $customer"
-              Write-Output "Working directory - $(Get-Location)"
-              Write-Output "Listing files - $(Get-ChildItem)"
-              $scriptPath = Join-Path $env:GITHUB_WORKSPACE "modules/MDR/Private/Get-RulePaths.ps1"
-              if (-not (Test-Path $scriptPath)) {
-                  Write-Error "Script file not found: $scriptPath"
-                  Write-Output "Listing content of $(Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private'):"
-                  Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private')
-                  exit 1
-              }
-              $rule_paths = & $scriptPath -customerName $customer -sharedArtifactsPath "sharedArtifacts/rules" -customerArtifactsPath "customers/$customer" | Out-String
-              $rule_paths = $rule_paths -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" -and -not $_.StartsWith("VERBOSE:") }
-              "rule_paths_$customer=$($rule_paths -join ',')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-              Write-Output "Rule paths for $customer - $($rule_paths -join ', ')"
-              # Persist rule paths to artifacts folder
-              $artifactsPath = Join-Path $env:GITHUB_WORKSPACE "artifacts"
-              if (-not (Test-Path $artifactsPath)) {
-                New-Item -ItemType Directory -Force -Path $artifactsPath | Out-Null
-              }
-              $filePath = Join-Path $artifactsPath "$customer-rule-paths.txt"
-              $rule_paths | Out-File -FilePath $filePath -Force
-          }
+      # - name: Generate list of rule paths
+      #   id: generate-rules
+      #   shell: pwsh
+      #   run: |
+      #     # Converted from bash to PowerShell
+      #     $selected_customers = "${{ steps.extract.outputs.selected_customers }}"
+      #     Write-Output "Selected customers: $selected_customers"
+      #     $customers = $selected_customers -split ','
+      #     foreach ($customer in $customers) {
+      #         Write-Output "Finding Paths for customer - $customer"
+      #         Write-Output "Working directory - $(Get-Location)"
+      #         Write-Output "Listing files - $(Get-ChildItem)"
+      #         $scriptPath = Join-Path $env:GITHUB_WORKSPACE "modules/MDR/Private/Get-RulePaths.ps1"
+      #         if (-not (Test-Path $scriptPath)) {
+      #             Write-Error "Script file not found: $scriptPath"
+      #             Write-Output "Listing content of $(Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private'):"
+      #             Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private')
+      #             exit 1
+      #         }
+      #         $rule_paths = & $scriptPath -customerName $customer -sharedArtifactsPath "sharedArtifacts/rules" -customerArtifactsPath "customers/$customer" | Out-String
+      #         $rule_paths = $rule_paths -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" -and -not $_.StartsWith("VERBOSE:") }
+      #         "rule_paths_$customer=$($rule_paths -join ',')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      #         Write-Output "Rule paths for $customer - $($rule_paths -join ', ')"
+      #         # Persist rule paths to artifacts folder
+      #         $artifactsPath = Join-Path $env:GITHUB_WORKSPACE "artifacts"
+      #         if (-not (Test-Path $artifactsPath)) {
+      #           New-Item -ItemType Directory -Force -Path $artifactsPath | Out-Null
+      #         }
+      #         $filePath = Join-Path $artifactsPath "$customer-rule-paths.txt"
+      #         $rule_paths | Out-File -FilePath $filePath -Force
+      #     }
 
-      - name: Copy rules to temp folder
-        shell: pwsh
-        id: copy-rules-temp
-        run: |
-          # TODO: fix below code to copy rules to temp folder!!!!!
-          $selected_customers = "${{ steps.extract.outputs.selected_customers }}"
-          $customers = $selected_customers -split ','
-          foreach ($customer in $customers) {
+      # - name: Copy rules to temp folder
+      #   shell: pwsh
+      #   id: copy-rules-temp
+      #   run: |
+      #     # TODO: fix below code to copy rules to temp folder!!!!!
+      #     $selected_customers = "${{ steps.extract.outputs.selected_customers }}"
+      #     $customers = $selected_customers -split ','
+      #     foreach ($customer in $customers) {
 
-              $scriptPath = Join-Path $env:GITHUB_WORKSPACE "modules/MDR/Private/Get-RulePaths.ps1"
-              if (-not (Test-Path $scriptPath)) {
-                  Write-Error "Script file not found: $scriptPath"
-                  Write-Output "Listing content of $(Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private'):"
-                  Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private')
-                  exit 1
-              }
-              $rule_paths = & $scriptPath -customerName $customer -sharedArtifactsPath "sharedArtifacts/rules" -customerArtifactsPath "customers/$customer"
-              "rule_paths_$customer=$rule_paths" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-              Write-Output "Rule paths for $customer - $($rule_paths)"
+      #         $scriptPath = Join-Path $env:GITHUB_WORKSPACE "modules/MDR/Private/Get-RulePaths.ps1"
+      #         if (-not (Test-Path $scriptPath)) {
+      #             Write-Error "Script file not found: $scriptPath"
+      #             Write-Output "Listing content of $(Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private'):"
+      #             Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private')
+      #             exit 1
+      #         }
+      #         $rule_paths = & $scriptPath -customerName $customer -sharedArtifactsPath "sharedArtifacts/rules" -customerArtifactsPath "customers/$customer"
+      #         "rule_paths_$customer=$rule_paths" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      #         Write-Output "Rule paths for $customer - $($rule_paths)"
               
-              # Persist rule paths to artifacts folder
-              $artifactsPath = Join-Path $env:GITHUB_WORKSPACE "artifacts"
-              if (-not (Test-Path $artifactsPath)) {
-                New-Item -ItemType Directory -Force -Path $artifactsPath | Out-Null
-              }
-              $filePath = Join-Path $artifactsPath "$customer-rule-paths.txt"
-              $rule_paths | Out-File -FilePath $filePath -Force
+      #         # Persist rule paths to artifacts folder
+      #         $artifactsPath = Join-Path $env:GITHUB_WORKSPACE "artifacts"
+      #         if (-not (Test-Path $artifactsPath)) {
+      #           New-Item -ItemType Directory -Force -Path $artifactsPath | Out-Null
+      #         }
+      #         $filePath = Join-Path $artifactsPath "$customer-rule-paths.txt"
+      #         $rule_paths | Out-File -FilePath $filePath -Force
               
-              # New: Copy each rule file to customer's temporary folder
-              $tempFolder = Join-Path $env:GITHUB_WORKSPACE "temp\$customer"
-              if (-not (Test-Path $tempFolder)) {
-                  New-Item -ItemType Directory -Force -Path $tempFolder | Out-Null
-              }
+      #         # New: Copy each rule file to customer's temporary folder
+      #         $tempFolder = Join-Path $env:GITHUB_WORKSPACE "temp\$customer"
+      #         if (-not (Test-Path $tempFolder)) {
+      #             New-Item -ItemType Directory -Force -Path $tempFolder | Out-Null
+      #         }
               
-              # Assume $rule_paths is a newline separated list; adjust as needed.
-              $files = $rule_paths -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
-              foreach ($file in $files) {
-                  if (Test-Path $file) {
-                      Copy-Item -Path $file -Destination $tempFolder -Force
-                      Write-Output "Copied $file to $tempFolder"
-                  } else {
-                      Write-Error "Rule file not found: $file for customer $customer"
-                  }
-              }
-          }      
+      #         # Assume $rule_paths is a newline separated list; adjust as needed.
+      #         $files = $rule_paths -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
+      #         foreach ($file in $files) {
+      #             if (Test-Path $file) {
+      #                 Copy-Item -Path $file -Destination $tempFolder -Force
+      #                 Write-Output "Copied $file to $tempFolder"
+      #             } else {
+      #                 Write-Error "Rule file not found: $file for customer $customer"
+      #             }
+      #         }
+      #     }      
       
-      - name: Upload rule paths artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          if-no-files-found: ignore
-          name: rule-paths
-          path: |
-            ${{ github.workspace }}/artifacts
+      # - name: Upload rule paths artifacts
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     if-no-files-found: ignore
+      #     name: rule-paths
+      #     path: |
+      #       ${{ github.workspace }}/artifacts
 
-      - name: Recursively print from temp folder
-        shell: pwsh
-        run: |
-          # List files recursively from temp folder
-          Get-ChildItem -Path "temp" -Recurse | ForEach-Object { Write-Output $_.FullName }
+      # - name: Recursively print from temp folder
+      #   shell: pwsh
+      #   run: |
+      #     # List files recursively from temp folder
+      #     Get-ChildItem -Path "temp" -Recurse | ForEach-Object { Write-Output $_.FullName }
 
-      - name: Process rule paths and generate ARM templates
-        id: print-rule-paths
-        shell: pwsh
-        run: |
-            # Process rule path files from the artifacts folder and generate merged JSON outputs for each customer
-            $tempFolder = Join-Path $env:GITHUB_WORKSPACE "temp"
+      # - name: Process rule paths and generate ARM templates
+      #   id: print-rule-paths
+      #   shell: pwsh
+      #   run: |
+      #       # Process rule path files from the artifacts folder and generate merged JSON outputs for each customer
+      #       $tempFolder = Join-Path $env:GITHUB_WORKSPACE "temp"
 
-            # Load functions from Merge-ContentTemplates.ps1
-            . ./scripts/Merge-ContentTemplates.ps1
+      #       # Load functions from Merge-ContentTemplates.ps1
+      #       . ./scripts/Merge-ContentTemplates.ps1
 
-            # Iterate over each customer and run Merge-ContentTemplate using the customer's temp folder as input
-            $selected_customers = "${{ steps.extract.outputs.selected_customers }}"
-            $customers = $selected_customers -split ","
-            foreach ($customer in $customers) {
-              Write-Output "Processing customer: $customer"
-              $mergeOutput = Merge-ContentTemplate -CurrentCustomer $customer
-              Write-Output "Merge-ContentTemplate output for $customer - $mergeOutput"
+      #       # Iterate over each customer and run Merge-ContentTemplate using the customer's temp folder as input
+      #       $selected_customers = "${{ steps.extract.outputs.selected_customers }}"
+      #       $customers = $selected_customers -split ","
+      #       foreach ($customer in $customers) {
+      #         Write-Output "Processing customer: $customer"
+      #         $mergeOutput = Merge-ContentTemplate -CurrentCustomer $customer
+      #         Write-Output "Merge-ContentTemplate output for $customer - $mergeOutput"
               
-              # Persist merged output to artifacts folder
-              $artifactsPath = Join-Path $env:GITHUB_WORKSPACE "artifacts"
-              if (-not (Test-Path $artifactsPath)) {
-              New-Item -ItemType Directory -Force -Path $artifactsPath | Out-Null
-              }
-              $filePath = Join-Path $artifactsPath "$customer`_merged_rules.json"
-              $mergeOutput | Out-File -FilePath $filePath -Force
-              Write-Output "Merged output for $customer saved to $filePath"
-            }
+      #         # Persist merged output to artifacts folder
+      #         $artifactsPath = Join-Path $env:GITHUB_WORKSPACE "artifacts"
+      #         if (-not (Test-Path $artifactsPath)) {
+      #         New-Item -ItemType Directory -Force -Path $artifactsPath | Out-Null
+      #         }
+      #         $filePath = Join-Path $artifactsPath "$customer`_merged_rules.json"
+      #         $mergeOutput | Out-File -FilePath $filePath -Force
+      #         Write-Output "Merged output for $customer saved to $filePath"
+      #       }
 
-      - name: Recursively print from temp folder
-        shell: pwsh
-        run: |
-          # List files recursively from temp folder
-          Get-ChildItem -Path "artifacts" -Recurse | ForEach-Object { Write-Output $_.FullName }
+      # - name: Recursively print from temp folder
+      #   shell: pwsh
+      #   run: |
+      #     # List files recursively from temp folder
+      #     Get-ChildItem -Path "artifacts" -Recurse | ForEach-Object { Write-Output $_.FullName }
     
-      # Currently fails
-      - name: Azure Login action
-        uses: azure/login@v2
-        continue-on-error: true
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-          enable-AzPSSession: true 
+      # # Currently fails
+      # - name: Azure Login action
+      #   uses: azure/login@v2
+      #   continue-on-error: true
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+      #     enable-AzPSSession: true 
 
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Azure CLI script
-        uses: azure/cli@v2
-        with:
-          azcliversion: latest
-          inlineScript: |
-            az group show --name "p-sec-mon"
-            # You can write your Azure CLI inline scripts here.
+      # - name: Azure login
+      #   uses: azure/login@v2
+      #   with:
+      #     client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      #     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      #     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # - name: Azure CLI script
+      #   uses: azure/cli@v2
+      #   with:
+      #     azcliversion: latest
+      #     inlineScript: |
+      #       az group show --name "p-sec-mon"
+      #       # You can write your Azure CLI inline scripts here.
 
 
-      - name: Deploy Rules ARM template
-        id: deploy
-        shell: pwsh
-        run: |
-          # Azure Login, either here or earlier in the steps?
-          az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }}
-            # Or as a single step using the Azure Login action?
-          # Loop to get all customers selected from output of "extract" step
-          # $selected_customers = "${{ steps.validate.outputs.selected_customers }}".Trim()
-          # Loop through each customers rulepath folder from "print-rule-paths" step
-          # Generate a bicep template based on this and deploy it
+      # - name: Deploy Rules ARM template
+      #   id: deploy
+      #   shell: pwsh
+      #   run: |
+      #     # Azure Login, either here or earlier in the steps?
+      #     az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }}
+      #       # Or as a single step using the Azure Login action?
+      #     # Loop to get all customers selected from output of "extract" step
+      #     # $selected_customers = "${{ steps.validate.outputs.selected_customers }}".Trim()
+      #     # Loop through each customers rulepath folder from "print-rule-paths" step
+      #     # Generate a bicep template based on this and deploy it
 
   #     - name: Deploy ARM Templates
   #       shell: pwsh
