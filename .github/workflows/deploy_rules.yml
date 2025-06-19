@@ -22,6 +22,7 @@ jobs:
         with:
           repository: bittib010/mdr_root
           token: ${{ secrets.PAT_TOKEN }}
+          path: master
 
       # TODO: create this way of getting token in future. better for orgs.
       # - name: Generate GitHub App Token
