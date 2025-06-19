@@ -64,6 +64,8 @@ jobs:
         run: |
           Get-ChildItem -Path "mdr_root/artifacts" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }
           Write-Output "Current working directory: $(Get-Location)"
+          # List current directory contents
+          Write-Output "Listing files in current directory: $(Get-ChildItem -Path '.')
 
       # - name: Import scripts
       #   shell: pwsh

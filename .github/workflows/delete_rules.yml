@@ -3,7 +3,7 @@ name: Track Deleted Files
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
   track-deletions:
