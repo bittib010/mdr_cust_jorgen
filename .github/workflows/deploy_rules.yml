@@ -17,32 +17,38 @@ jobs:
           inlineScript: |
             echo "Azure CLI setup complete." 
 
-      - name: Generate GitHub App Token
-        id: app-token
-        uses: actions/create-github-app-token@v1
+      - uses: actions/checkout@v1  
         with:
-          # TODO: create the SENTINEL_MDR_WRITE_APP_ID and SENTINEL_MDR_WRITE_PRIVATE_KEY secrets
-          # and add them to the repository secrets
-          app-id: ${{ vars.SENTINEL_MDR_WRITE_APP_ID }}
-          private-key: ${{ secrets.SENTINEL_MDR_WRITE_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: |
-            mdr_root
+          repository: bittib010/mdr_root
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      # TODO: create this way of getting token in future. better for orgs.
+      # - name: Generate GitHub App Token
+      #   id: app-token
+      #   uses: actions/create-github-app-token@v1
+      #   with:
+      #     # TODO: create the SENTINEL_MDR_WRITE_APP_ID and SENTINEL_MDR_WRITE_PRIVATE_KEY secrets
+      #     # and add them to the repository secrets
+      #     app-id: ${{ vars.SENTINEL_MDR_WRITE_APP_ID }}
+      #     private-key: ${{ secrets.SENTINEL_MDR_WRITE_PRIVATE_KEY }}
+      #     owner: ${{ github.repository_owner }}
+      #     repositories: |
+      #       mdr_root
 
       # Checkout current repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Checkout mdr_root repository
-      - name: Checkout mdr_root repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          path: mdr_root
-          persist-credentials: true
-          ref: main
-          repository: mdr_root
-          token: ${{ steps.app-token.outputs.token }}
+      # # Checkout mdr_root repository
+      # - name: Checkout mdr_root repository
+      #   uses: actions/checkout@v4
+      #   with:
+      #     fetch-depth: 0
+      #     path: mdr_root
+      #     persist-credentials: true
+      #     ref: main
+      #     repository: mdr_root
+      #     token: ${{ steps.app-token.outputs.token }}
 
       # - name: Setup PowerShell module cache
       #   id: cacher
