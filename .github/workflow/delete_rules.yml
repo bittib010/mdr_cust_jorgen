@@ -1,0 +1,46 @@
+name: Track Deleted Files
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  track-deletions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get two latest SHAs
+        id: get_shas
+        run: |
+          SHAS=( $(git rev-list --max-count=2 origin/main) )
+          echo "first_sha=${SHAS[1]}" >> $GITHUB_OUTPUT
+          echo "latest_sha=${SHAS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Find deleted files
+        id: find_deleted
+        run: |
+          DELETED=$(git diff \
+                      --diff-filter=D \
+                      --name-only \
+                      ${{ steps.get_shas.outputs.first_sha }} \
+                      ${{ steps.get_shas.outputs.latest_sha }})
+          echo "deleted_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$DELETED" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Print deleted file contents
+        run: |
+          echo "### Deleted files and their contents:"
+          while IFS= read -r FILE; do
+            [ -z "$FILE" ] && continue
+            echo
+            echo "File: $FILE"
+            echo "---------------------"
+            git show "${{ steps.get_shas.outputs.first_sha }}:$FILE" || echo "[could not retrieve content]"
+            echo "====================="
+          done <<< "${{ steps.find_deleted.outputs.deleted_files }}"
