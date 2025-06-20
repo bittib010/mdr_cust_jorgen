@@ -81,6 +81,8 @@ jobs:
             Write-Output "No YAML files found in the repository."
           }
 
+          Get-ChildItem -Path "/home/runner/work/mdr_cust_template/" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }
+
       # - name: Import scripts
       #   shell: pwsh
       #   continue-on-error: true
