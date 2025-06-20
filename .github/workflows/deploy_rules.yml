@@ -97,7 +97,6 @@ jobs:
           # If ID does not already exist, then we should add the current file to the content.csv
           #  recurse through the deployment-config.yaml file and find the "ExcludeRules", use the "id" field to match the ID in the content.csv file and remove the line from the content.csv file that has the same ID.
           $csvPath = "${{ github.workspace }}/content.csv"
-
           
           # Ensure CSV file exists with header
           if (-not (Test-Path $csvPath)) {
@@ -132,9 +131,12 @@ jobs:
                   $id = ""
               }
               
-              if ($id -ne "") {
+              if ($id -and $id.Trim() -ne "") {
                   # If file id already exists, update its path; otherwise, add new entry
                   $csvContent[$id] = $relativePath
+              }
+              else {
+                  Write-Host "Skipping file $($file.FullName) due to invalid or empty id"
               }
           }
           
