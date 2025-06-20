@@ -65,8 +65,8 @@ jobs:
       - name: List mdr_root artifacts folder
         shell: pwsh
         run: |
-          # changed: list files from the mdr_root checkout folder instead of its parent
-          $artifactPath = Join-Path $env:GITHUB_WORKSPACE "mdr_root"
+          # changed: list files from the mdr_root checkout folder using relative path
+          $artifactPath = "./mdr_root"
           Get-ChildItem -Path $artifactPath -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }
           Write-Output "Current working directory: $(Get-Location)"
           Write-Output "Listing files in mdr_root: $(Get-ChildItem -Path $artifactPath)"
