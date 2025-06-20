@@ -90,12 +90,6 @@ jobs:
       - name: Add, exclude and override content
         shell: pwsh
         run: |
-          # Recurse from GitHub workspace and sub folder mdr_cust
-          # Read every ID
-          # Open the content.csv and keep track of the IDs.
-          # If ID is a match with current file, then we should replace the existing one with the current one.
-          # If ID does not already exist, then we should add the current file to the content.csv
-          #  recurse through the deployment-config.yaml file and find the "ExcludeRules", use the "id" field to match the ID in the content.csv file and remove the line from the content.csv file that has the same ID.
           $csvPath = "${{ github.workspace }}/content.csv"
           
           # Ensure CSV file exists with header
@@ -120,6 +114,7 @@ jobs:
           foreach ($file in $files) {
               $relativePath = $file.FullName -replace [regex]::Escape("${{ github.workspace }}/mdr_cust/"), ""
               $relativePath = $relativePath -replace '\\', '/'
+              Write-Host "Processing file: $($file.FullName) with relative path: $relativePath"
               
               try {
                   $yamlContent = Get-Content -Raw -Path $file.FullName
