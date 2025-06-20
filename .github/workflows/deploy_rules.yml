@@ -60,6 +60,10 @@ jobs:
       - name: List mdr_root artifacts folder
         shell: pwsh
         run: |
-          Get-ChildItem /home/runner -recurse | Where-Object {$_.PSIsContainer -and $_.Name -like 'mdr'} | ForEach-Object {
+          Get-ChildItem /home/runner -recurse | Where-Object {$_.PSIsContainer -and $_.Name -like 'artefacts'} | ForEach-Object {
             Write-Host "Found artefacts folder: $($_.FullName)"
+          }
+          # find all yaml files from root (skip if access is denied)
+          Get-ChildItem / -recurse -Filter *.yaml -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "Found YAML file: $($_.FullName)"
           }
