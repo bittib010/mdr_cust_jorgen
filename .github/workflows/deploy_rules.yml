@@ -76,7 +76,6 @@ jobs:
               Write-Output "No mdr_root folder found."
           }
           Write-Output "Current working directory: $(Get-Location)"
-          Write-Output "Listing files in mdr_root: $(Get-ChildItem -Path $artifactPath)"
 
           # Find all YAML files from root
           $yamlFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File | Where-Object { $_.Name -like '*.y*ml' }
