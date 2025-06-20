@@ -147,7 +147,7 @@ jobs:
           }
           
           # Process ExcludeRules from deployment-config.yaml
-          $configPath = "${{ github.workspace }}/deployment-config.yaml"
+          $configPath = "${{ github.workspace }}/mdr_cust/deployment-config.yaml"
           if (Test-Path $configPath) {
               try {
                   $configContent = Get-Content -Raw -Path $configPath
