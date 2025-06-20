@@ -14,11 +14,11 @@ jobs:
   initialize:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Azure CLI
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            echo "Azure CLI setup complete." 
+      # - name: Set up Azure CLI
+      #   uses: azure/cli@v2
+      #   with:
+      #     inlineScript: |
+      #       echo "Azure CLI setup complete." 
 
       - name: Checkout mdr_root repository
         uses: actions/checkout@v4  
@@ -31,35 +31,30 @@ jobs:
       # Checkout current repository
       - name: Checkout repository
         uses: actions/checkout@v4
+        with: 
+          path: mdr_cust
 
 
-      # - name: Setup PowerShell module cache
-      #   id: cacher
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: "modules/MDR/Private/Modules"
-      #     key: ${{ runner.os }}-suffix
-
-      - name: Install PowerShell Modules
-        id: install-modules
-        shell: pwsh
-        run: |
-          $InformationPreference = 'Continue'
-          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-          try {
-            $modulesToInstall = @(
-              'powershell-yaml'
-            )
-            $modulesToInstall | ForEach-Object {
-              if (-not (Get-Module -Name $_ -ListAvailable)) {
-                Write-Information -MessageData "Module [$_] not found, installing it..."
-                Install-Module -Name $_ -ErrorAction Stop
-              }
-            }
-          } catch {
-            Write-Error -Message "Failed to install module [$_]."
-            exit 1
-          }
+      # - name: Install PowerShell Modules
+      #   id: install-modules
+      #   shell: pwsh
+      #   run: |
+      #     $InformationPreference = 'Continue'
+      #     Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+      #     try {
+      #       $modulesToInstall = @(
+      #         'powershell-yaml'
+      #       )
+      #       $modulesToInstall | ForEach-Object {
+      #         if (-not (Get-Module -Name $_ -ListAvailable)) {
+      #           Write-Information -MessageData "Module [$_] not found, installing it..."
+      #           Install-Module -Name $_ -ErrorAction Stop
+      #         }
+      #       }
+      #     } catch {
+      #       Write-Error -Message "Failed to install module [$_]."
+      #       exit 1
+      #     }
 
       # Loop the /mdr_root folders subfolder: artefacts recursively
       - name: List mdr_root artifacts folder
@@ -88,171 +83,3 @@ jobs:
             Write-Output "No YAML files found in the repository."
           }
           Get-ChildItem -Path "/home/runner/work/mdr_cust_template/" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }
-
-      # - name: Import scripts
-      #   shell: pwsh
-      #   continue-on-error: true
-      #   run: |
-      #     . ./scripts/Merge-ContentTemplates.ps1
-
-      - name: Generate list of YAML rule files
-        id: generate-yaml-rules
-        shell: pwsh
-        run: |
-            # changed: set artifacts folder to root "/" for recursing from the root level
-            $artifactPath = "/"
-            
-            if (-not (Test-Path $artifactPath)) {
-              Write-Error "Artifacts folder not found: $artifactPath"
-              exit 1
-            }
-            
-            
-            Write-Output "Gathering rule paths under: $artifactPath"
-            
-            # Recursively find files with names matching pattern y*ml from root
-            $yamlFiles = Get-ChildItem -Path $artifactPath -Recurse -File | Where-Object { $_.Name -like 'y*ml' }
-            
-            foreach ($file in $yamlFiles) {
-              Write-Output $file.FullName
-            }
-
-      # - name: Copy rules to temp folder
-      #   shell: pwsh
-      #   id: copy-rules-temp
-      #   run: |
-      #     # TODO: fix below code to copy rules to temp folder!!!!!
-      #     $selected_customers = "${{ steps.extract.outputs.selected_customers }}"
-      #     $customers = $selected_customers -split ','
-      #     foreach ($customer in $customers) {
-
-      #         $scriptPath = Join-Path $env:GITHUB_WORKSPACE "modules/MDR/Private/Get-RulePaths.ps1"
-      #         if (-not (Test-Path $scriptPath)) {
-      #             Write-Error "Script file not found: $scriptPath"
-      #             Write-Output "Listing content of $(Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private'):"
-      #             Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'modules/MDR/Private')
-      #             exit 1
-      #         }
-      #         $rule_paths = & $scriptPath -customerName $customer -sharedArtifactsPath "sharedArtifacts/rules" -customerArtifactsPath "customers/$customer"
-      #         "rule_paths_$customer=$rule_paths" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-      #         Write-Output "Rule paths for $customer - $($rule_paths)"
-              
-      #         # Persist rule paths to artifacts folder
-      #         $artifactsPath = Join-Path $env:GITHUB_WORKSPACE "artifacts"
-      #         if (-not (Test-Path $artifactsPath)) {
-      #           New-Item -ItemType Directory -Force -Path $artifactsPath | Out-Null
-      #         }
-      #         $filePath = Join-Path $artifactsPath "$customer-rule-paths.txt"
-      #         $rule_paths | Out-File -FilePath $filePath -Force
-              
-      #         # New: Copy each rule file to customer's temporary folder
-      #         $tempFolder = Join-Path $env:GITHUB_WORKSPACE "temp\$customer"
-      #         if (-not (Test-Path $tempFolder)) {
-      #             New-Item -ItemType Directory -Force -Path $tempFolder | Out-Null
-      #         }
-              
-      #         # Assume $rule_paths is a newline separated list; adjust as needed.
-      #         $files = $rule_paths -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
-      #         foreach ($file in $files) {
-      #             if (Test-Path $file) {
-      #                 Copy-Item -Path $file -Destination $tempFolder -Force
-      #                 Write-Output "Copied $file to $tempFolder"
-      #             } else {
-      #                 Write-Error "Rule file not found: $file for customer $customer"
-      #             }
-      #         }
-      #     }      
-      
-      # - name: Upload rule paths artifacts
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     if-no-files-found: ignore
-      #     name: rule-paths
-      #     path: |
-      #       ${{ github.workspace }}/artifacts
-
-      # - name: Recursively print from temp folder
-      #   shell: pwsh
-      #   run: |
-      #     # List files recursively from temp folder
-      #     Get-ChildItem -Path "temp" -Recurse | ForEach-Object { Write-Output $_.FullName }
-
-      # - name: Process rule paths and generate ARM templates
-      #   id: print-rule-paths
-      #   shell: pwsh
-      #   run: |
-      #       # Process rule path files from the artifacts folder and generate merged JSON outputs for each customer
-      #       $tempFolder = Join-Path $env:GITHUB_WORKSPACE "temp"
-
-      #       # Load functions from Merge-ContentTemplates.ps1
-      #       . ./scripts/Merge-ContentTemplates.ps1
-
-      #       # Iterate over each customer and run Merge-ContentTemplate using the customer's temp folder as input
-      #       $selected_customers = "${{ steps.extract.outputs.selected_customers }}"
-      #       $customers = $selected_customers -split ","
-      #       foreach ($customer in $customers) {
-      #         Write-Output "Processing customer: $customer"
-      #         $mergeOutput = Merge-ContentTemplate -CurrentCustomer $customer
-      #         Write-Output "Merge-ContentTemplate output for $customer - $mergeOutput"
-              
-      #         # Persist merged output to artifacts folder
-      #         $artifactsPath = Join-Path $env:GITHUB_WORKSPACE "artifacts"
-      #         if (-not (Test-Path $artifactsPath)) {
-      #         New-Item -ItemType Directory -Force -Path $artifactsPath | Out-Null
-      #         }
-      #         $filePath = Join-Path $artifactsPath "$customer`_merged_rules.json"
-      #         $mergeOutput | Out-File -FilePath $filePath -Force
-      #         Write-Output "Merged output for $customer saved to $filePath"
-      #       }
-
-      # - name: Recursively print from temp folder
-      #   shell: pwsh
-      #   run: |
-      #     # List files recursively from temp folder
-      #     Get-ChildItem -Path "artifacts" -Recurse | ForEach-Object { Write-Output $_.FullName }
-    
-      # # Currently fails
-      # - name: Azure Login action
-      #   uses: azure/login@v2
-      #   continue-on-error: true
-      #   with:
-      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
-      #     enable-AzPSSession: true 
-
-      # - name: Azure login
-      #   uses: azure/login@v2
-      #   with:
-      #     client-id: ${{ secrets.AZURE_CLIENT_ID }}
-      #     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-      #     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      # - name: Azure CLI script
-      #   uses: azure/cli@v2
-      #   with:
-      #     azcliversion: latest
-      #     inlineScript: |
-      #       az group show --name "p-sec-mon"
-      #       # You can write your Azure CLI inline scripts here.
-
-
-      # - name: Deploy Rules ARM template
-      #   id: deploy
-      #   shell: pwsh
-      #   run: |
-      #     # Azure Login, either here or earlier in the steps?
-      #     az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }}
-      #       # Or as a single step using the Azure Login action?
-      #     # Loop to get all customers selected from output of "extract" step
-      #     # $selected_customers = "${{ steps.validate.outputs.selected_customers }}".Trim()
-      #     # Loop through each customers rulepath folder from "print-rule-paths" step
-      #     # Generate a bicep template based on this and deploy it
-
-  #     - name: Deploy ARM Templates
-  #       shell: pwsh
-  #       run: |
-  #         # Converted from bash to PowerShell
-  #         $selected_customers = "${{ steps.validate.outputs.selected_customers }}".Trim()
-  #         $customers = $selected_customers -split '\s+'
-  #         foreach ($customer in $customers) {
-  #             Write-Output "Deploying ARM template for $customer..."
-  #             az deployment group create --resource-group $customer --template-file "./customers/$customer/deploy.bicep"
-  #         }
