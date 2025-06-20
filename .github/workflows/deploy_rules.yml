@@ -57,6 +57,7 @@ jobs:
             Write-Error -Message "Failed to install module [$_]."
             exit 1
           }
+
       # Loop the /mdr_root folders subfolder: artefacts recursively
       - name: List mdr_root artifacts folder
         shell: pwsh
@@ -88,7 +89,7 @@ jobs:
         shell: pwsh
         run: |
             # Define the artifacts folder in the checked out mdr_root repository.
-            $artifactPath = Join-Path $env:GITHUB_WORKSPACE "../mdr_root/mdr_root/artifacts"
+            $artifactPath = Join-Path $env:GITHUB_WORKSPACE
             
             if (-not (Test-Path $artifactPath)) {
             Write-Error "Artifacts folder not found: $artifactPath"
