@@ -2,6 +2,9 @@ name: Deploy Rules
 
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
+  push:
+    branches:
+      - master
 
 
 # env:
@@ -62,7 +65,7 @@ jobs:
       - name: List mdr_root artifacts folder
         shell: pwsh
         run: |
-          $artifactPath = Join-Path $env:GITHUB_WORKSPACE "mdr_root/mdr_root/artifacts"
+          $artifactPath = Join-Path $env:GITHUB_WORKSPACE "../"
           Get-ChildItem -Path $artifactPath -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }
           Write-Output "Current working directory: $(Get-Location)"
           Write-Output "Listing files in GITHUB_WORKSPACE: $(Get-ChildItem -Path $env:GITHUB_WORKSPACE)"
