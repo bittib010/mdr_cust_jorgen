@@ -60,10 +60,22 @@ jobs:
       - name: List mdr_root artifacts folder
         shell: pwsh
         run: |
-          Get-ChildItem /home/runner -recurse | Where-Object {$_.PSIsContainer -and $_.Name -like 'artefacts'} | ForEach-Object {
+          # Recurse and save paths to a file from mdr_root. Save to file on GitHub workspace root
+          Get-ChildItem ${{ github.workspace }}/mdr_root -recurse -Filter *.yaml | ForEach-Object {
             Write-Host "Found artefacts folder: $($_.FullName)"
+            $path = $_.FullName
+            $path = $path -replace [regex]::Escape("${{ github.workspace }}/mdr_root/"), ""
+            $path = $path -replace [regex]::Escape("\\"), "/"
+            Write-Host "Saving path to file: $path"
+            Add-Content -Path "${{ github.workspace }}/mdr_root_artifacts.txt" -Value $path
           }
-          # find all yaml files from root (skip if access is denied)
-          Get-ChildItem / -recurse -Filter *.yaml -ErrorAction SilentlyContinue | ForEach-Object {
-            Write-Host "Found YAML file: $($_.FullName)"
+
+          # Recurse and save paths from GitHub workspace and sub folder mdr_cust
+          Get-ChildItem ${{ github.workspace }}/mdr_cust -recurse -Filter *.yaml | ForEach-Object {
+            Write-Host "Found mdr_cust folder: $($_.FullName)"
+            $path = $_.FullName
+            $path = $path -replace [regex]::Escape("${{ github.workspace }}/mdr_cust/"), ""
+            $path = $path -replace [regex]::Escape("\\"), "/"
+            Write-Host "Saving path to file: $path"
+            Add-Content -Path "${{ github.workspace }}/mdr_root_artifacts.txt" -Value $path
           }
