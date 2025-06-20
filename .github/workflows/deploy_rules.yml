@@ -25,7 +25,7 @@ jobs:
         with:
           repository: bittib010/mdr_root
           token: ${{ secrets.PAT_TOKEN }}
-          #path: mdr_root
+          path: mdr_root
 
 
       # Checkout current repository
@@ -65,10 +65,11 @@ jobs:
       - name: List mdr_root artifacts folder
         shell: pwsh
         run: |
-          $artifactPath = Join-Path $env:GITHUB_WORKSPACE "../"
+          # changed: list files from the mdr_root checkout folder instead of its parent
+          $artifactPath = Join-Path $env:GITHUB_WORKSPACE "mdr_root"
           Get-ChildItem -Path $artifactPath -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }
           Write-Output "Current working directory: $(Get-Location)"
-          Write-Output "Listing files in GITHUB_WORKSPACE: $(Get-ChildItem -Path $env:GITHUB_WORKSPACE)"
+          Write-Output "Listing files in mdr_root: $(Get-ChildItem -Path $artifactPath)"
 
           # Find all YAML files from root
           $yamlFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File | Where-Object { $_.Name -like '*.y*ml' }
