@@ -92,7 +92,7 @@ jobs:
         shell: pwsh
         run: |
             # Define the artifacts folder in the checked out mdr_root repository.
-            $artifactPath = Join-Path $env:GITHUB_WORKSPACE
+            $artifactPath = Join-Path $env:GITHUB_WORKSPACE ".."  # fixed: added child path parameter
             
             if (-not (Test-Path $artifactPath)) {
             Write-Error "Artifacts folder not found: $artifactPath"
