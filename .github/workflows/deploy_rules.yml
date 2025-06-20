@@ -57,25 +57,115 @@ jobs:
       #     }
 
       # Loop the /mdr_root folders subfolder: artefacts recursively
-      - name: List mdr_root artifacts folder
+      - name: Add base content to artefacts
         shell: pwsh
         run: |
-          # Recurse and save paths to a file from mdr_root. Save to file on GitHub workspace root
-          Get-ChildItem ${{ github.workspace }}/mdr_root -recurse -Filter *.yaml | ForEach-Object {
-            Write-Host "Found artefacts folder: $($_.FullName)"
-            $path = $_.FullName
-            $path = $path -replace [regex]::Escape("${{ github.workspace }}/mdr_root/"), ""
-            $path = $path -replace [regex]::Escape("\\"), "/"
-            Write-Host "Saving path to file: $path"
-            Add-Content -Path "${{ github.workspace }}/mdr_root_artifacts.txt" -Value $path
+          $csvPath = "${{ github.workspace }}/content.csv"
+          # Write CSV header if the file doesn't exist
+          if (-not (Test-Path $csvPath)) {
+          "Path,ID" | Out-File -FilePath $csvPath
+            }
+            
+            Get-ChildItem "${{ github.workspace }}/mdr_root" -Recurse -Filter *.yaml | ForEach-Object {
+          Write-Host "Found artefacts file: $($_.FullName)"
+          $path = $_.FullName
+          $path = $path -replace [regex]::Escape("${{ github.workspace }}/mdr_root/"), ""
+          $path = $path -replace '\\', '/'
+
+          # Read YAML file and extract the "id" field
+          try {
+            $yamlContent = Get-Content -Raw -Path $_.FullName
+            $yamlObject = ConvertFrom-Yaml $yamlContent
+            $id = $yamlObject.id
+          }
+          catch {
+            Write-Host "Failed to parse YAML from $($_.FullName)"
+            $id = ""
           }
 
-          # Recurse and save paths from GitHub workspace and sub folder mdr_cust
-          Get-ChildItem ${{ github.workspace }}/mdr_cust -recurse -Filter *.yaml | ForEach-Object {
-            Write-Host "Found mdr_cust folder: $($_.FullName)"
-            $path = $_.FullName
-            $path = $path -replace [regex]::Escape("${{ github.workspace }}/mdr_cust/"), ""
-            $path = $path -replace [regex]::Escape("\\"), "/"
-            Write-Host "Saving path to file: $path"
-            Add-Content -Path "${{ github.workspace }}/mdr_root_artifacts.txt" -Value $path
+          Write-Host "Saving path: $path with ID: $id"
+          "$path,$id" | Out-File -Append -FilePath $csvPath
+            }
+
+      - name: Add, exclude and override content
+        shell: pwsh
+        run: |
+          # Recurse from GitHub workspace and sub folder mdr_cust
+          # Read every ID
+          # Open the content.csv and keep track of the IDs.
+          # If ID is a match with current file, then we should replace the existing one with the current one.
+          # If ID does not already exist, then we should add the current file to the content.csv
+          #  recurse through the deployment-config.yaml file and find the "ExcludeRules", use the "id" field to match the ID in the content.csv file and remove the line from the content.csv file that has the same ID.
+          $csvPath = "${{ github.workspace }}/content.csv"
+
+          
+          # Ensure CSV file exists with header
+          if (-not (Test-Path $csvPath)) {
+              "Path,ID" | Out-File -FilePath $csvPath
           }
+          
+          # Import existing CSV content (ignoring header issues)
+          $csvContent = @{
+          }
+          if (Test-Path $csvPath) {
+              $lines = Get-Content -Path $csvPath | Select-Object -Skip 1
+              foreach ($line in $lines) {
+                  if ($line -match "^(.*?),(.*)$") {
+                      $csvContent[$matches[2]] = $matches[1]
+                  }
+              }
+          }
+          
+          # Process every YAML file in mdr_cust folder
+          $files = Get-ChildItem "${{ github.workspace }}/mdr_cust" -Recurse -Filter *.yaml
+          foreach ($file in $files) {
+              $relativePath = $file.FullName -replace [regex]::Escape("${{ github.workspace }}/mdr_cust/"), ""
+              $relativePath = $relativePath -replace '\\', '/'
+              
+              try {
+                  $yamlContent = Get-Content -Raw -Path $file.FullName
+                  $yamlObj = $yamlContent | ConvertFrom-Yaml
+                  $id = $yamlObj.id
+              }
+              catch {
+                  Write-Host "Failed to parse YAML from $($file.FullName)"
+                  $id = ""
+              }
+              
+              if ($id -ne "") {
+                  # If file id already exists, update its path; otherwise, add new entry
+                  $csvContent[$id] = $relativePath
+              }
+          }
+          
+          # Update CSV content file by rewriting it with header and new content
+          $csvLines = @("Path,ID")
+          foreach ($key in $csvContent.Keys) {
+              $csvLines += "$($csvContent[$key]),$key"
+          }
+          
+          # Process ExcludeRules from deployment-config.yaml
+          $configPath = "${{ github.workspace }}/deployment-config.yaml"
+          if (Test-Path $configPath) {
+              try {
+                  $configContent = Get-Content -Raw -Path $configPath
+                  $config = $configContent | ConvertFrom-Yaml
+                  if ($config.ExcludeRules) {
+                      foreach ($rule in $config.ExcludeRules) {
+                          if ($rule.id -and $csvContent.ContainsKey($rule.id)) {
+                              $csvContent.Remove($rule.id)
+                          }
+                      }
+                      # Rebuild CSV content after exclusion
+                      $csvLines = @("Path,ID")
+                      foreach ($key in $csvContent.Keys) {
+                          $csvLines += "$($csvContent[$key]),$key"
+                      }
+                  }
+              }
+              catch {
+                  Write-Host "Failed to parse deployment-config.yaml"
+              }
+          }
+          
+          $csvLines | Out-File -FilePath $csvPath -Encoding utf8
