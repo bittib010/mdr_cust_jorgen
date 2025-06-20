@@ -65,8 +65,8 @@ jobs:
       - name: List mdr_root artifacts folder
         shell: pwsh
         run: |
-          # changed: search recursively from the filesystem root "/"
-          $mdrRootFolders = Get-ChildItem -Path "/" -Directory -Recurse | Where-Object { $_.Name -eq "mdr_root" }
+          # changed: search recursively from the filesystem root "/" with error suppression
+          $mdrRootFolders = Get-ChildItem -Path "/" -Directory -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq "mdr_root" }
           if ($mdrRootFolders -and $mdrRootFolders.Count -gt 0) {
               foreach ($folder in $mdrRootFolders) {
                   Write-Output "Listing files in: $($folder.FullName)"
@@ -77,8 +77,8 @@ jobs:
           }
           Write-Output "Current working directory: $(Get-Location)"
           
-          # changed: find all YAML files recursively from root "/"
-          $yamlFiles = Get-ChildItem -Path "/" -Recurse -File | Where-Object { $_.Name -like '*.y*ml' }
+          # changed: find all YAML files recursively from root "/" with error suppression
+          $yamlFiles = Get-ChildItem -Path "/" -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*.y*ml' }
           if ($yamlFiles) { 
             Write-Output "Found YAML files:"
             foreach ($file in $yamlFiles) {
