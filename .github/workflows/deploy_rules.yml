@@ -65,8 +65,8 @@ jobs:
       - name: List mdr_root artifacts folder
         shell: pwsh
         run: |
-          # changed: recursively search for directories named "mdr_root" rather than using a fixed path
-          $mdrRootFolders = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Directory -Recurse | Where-Object { $_.Name -eq "mdr_root" }
+          # changed: search recursively from the filesystem root "/"
+          $mdrRootFolders = Get-ChildItem -Path "/" -Directory -Recurse | Where-Object { $_.Name -eq "mdr_root" }
           if ($mdrRootFolders -and $mdrRootFolders.Count -gt 0) {
               foreach ($folder in $mdrRootFolders) {
                   Write-Output "Listing files in: $($folder.FullName)"
@@ -76,9 +76,9 @@ jobs:
               Write-Output "No mdr_root folder found."
           }
           Write-Output "Current working directory: $(Get-Location)"
-
-          # Find all YAML files from root
-          $yamlFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File | Where-Object { $_.Name -like '*.y*ml' }
+          
+          # changed: find all YAML files recursively from root "/"
+          $yamlFiles = Get-ChildItem -Path "/" -Recurse -File | Where-Object { $_.Name -like '*.y*ml' }
           if ($yamlFiles) { 
             Write-Output "Found YAML files:"
             foreach ($file in $yamlFiles) {
@@ -87,7 +87,6 @@ jobs:
           } else {
             Write-Output "No YAML files found in the repository."
           }
-
           Get-ChildItem -Path "/home/runner/work/mdr_cust_template/" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }
 
       # - name: Import scripts
@@ -100,21 +99,22 @@ jobs:
         id: generate-yaml-rules
         shell: pwsh
         run: |
-            # Define the artifacts folder in the checked out mdr_root repository.
-            $artifactPath = Join-Path $env:GITHUB_WORKSPACE ".."  # fixed: added child path parameter
+            # changed: set artifacts folder to root "/" for recursing from the root level
+            $artifactPath = "/"
             
             if (-not (Test-Path $artifactPath)) {
-            Write-Error "Artifacts folder not found: $artifactPath"
-            exit 1
-              }
-
+              Write-Error "Artifacts folder not found: $artifactPath"
+              exit 1
+            }
+            
+            
             Write-Output "Gathering rule paths under: $artifactPath"
             
-            # Recursively find files with names matching pattern y*ml
+            # Recursively find files with names matching pattern y*ml from root
             $yamlFiles = Get-ChildItem -Path $artifactPath -Recurse -File | Where-Object { $_.Name -like 'y*ml' }
             
             foreach ($file in $yamlFiles) {
-            Write-Output $file.FullName
+              Write-Output $file.FullName
             }
 
       # - name: Copy rules to temp folder
