@@ -116,7 +116,7 @@ jobs:
           }
           
           # Process every YAML file in mdr_cust folder
-          $files = Get-ChildItem "${{ github.workspace }}/mdr_cust" -Recurse -Filter *.yaml
+          $files = Get-ChildItem "${{ github.workspace }}/" -Recurse -Filter *.yaml
           foreach ($file in $files) {
               $relativePath = $file.FullName -replace [regex]::Escape("${{ github.workspace }}/mdr_cust/"), ""
               $relativePath = $relativePath -replace '\\', '/'
