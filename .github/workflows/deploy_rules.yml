@@ -65,9 +65,16 @@ jobs:
       - name: List mdr_root artifacts folder
         shell: pwsh
         run: |
-          # changed: list files from the mdr_root checkout folder using relative path
-          $artifactPath = "./mdr_root"
-          Get-ChildItem -Path $artifactPath -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }
+          # changed: recursively search for directories named "mdr_root" rather than using a fixed path
+          $mdrRootFolders = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Directory -Recurse | Where-Object { $_.Name -eq "mdr_root" }
+          if ($mdrRootFolders -and $mdrRootFolders.Count -gt 0) {
+              foreach ($folder in $mdrRootFolders) {
+                  Write-Output "Listing files in: $($folder.FullName)"
+                  Get-ChildItem -Path $folder.FullName -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }
+              }
+          } else {
+              Write-Output "No mdr_root folder found."
+          }
           Write-Output "Current working directory: $(Get-Location)"
           Write-Output "Listing files in mdr_root: $(Get-ChildItem -Path $artifactPath)"
 
