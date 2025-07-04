@@ -44,11 +44,15 @@ Operational notes:
 Automatic workflow for adding rules from Azure Github repository should preferrably be done via a simple GUI that let's us keep an overview of all active, deployed, deleted, overriden, excluded etc rules for all customers. 
 
 Wanted functionality:
-- Do a git pull for all customers
+- Do a git pull for all customers by prompting
+	- limited git pull - 13k?
+	- Maybe even limited to the Solutions folder also to avoid duplicates.
 - Scan folders on opening the application for all rules
 - All analysts have their own workspace setup (folder structure wise). So a few options to detect customers:
     - Scan iteratively from a given location for `deployment_config.yml` file to decide if the current scanned location is a customer
     - Add that customer root folder as an input to the application
+    - Overview of customers could default to a list within a config file for the application.
+      - Default to recursively from one level above.
 - When all customer locations has been found - scan them for rules (artifacts folder), excluded rules in the deployment config file, Deleted files may be commented in the `DeletedRules` in the deployment config file. This list is optionally kept there and may serve as input to why rule is not present at customer. Helps for future reconsiderations. 
 - Pagination
 
