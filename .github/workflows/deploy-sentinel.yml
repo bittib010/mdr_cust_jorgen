@@ -1,0 +1,107 @@
+---
+name: Deploy Sentinel
+
+# This workflow will run when a pull request is created or updated and can be triggered
+# manually.
+#
+# The purpose is to deploy the Microsoft Sentinel workspace and related configuration and
+# resources.
+#
+# This deployment will happen when the service is established as well as every time any changes
+# are needed to the infrastructure.
+
+on: # yamllint disable-line rule:truthy
+  pull_request:
+    branches: [main]
+    paths:
+      - "bicep/p-sec-mon/**.bicep*"
+      - "!.github/workflows/**" # this filter prevents other workflow changes from triggering this workflow
+      - ".github/workflows/azure-deploy.yml"
+    types: [opened, synchronize]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read # for checkout
+  id-token: write # for Azure login with open id
+  pull-requests: write # for pull request comment
+
+jobs:
+  plan:
+    name: Plan Sentinel Deployment
+    # environment: production-unlocked
+    outputs:
+      providers: ${{ steps.plan.outputs.providers }}
+      location: ${{ steps.config.outputs.location }}
+      workspace_rg: ${{ steps.config.outputs.workspace_rg }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+
+      - name: Read deployment configuration
+        id: config
+        run: |
+          echo "Reading deployment configuration..."
+          if [ -f "./deployment-config.yaml" ]; then
+            LOCATION=$(yq '.settings.location' deployment-config.yaml)
+            WORKSPACE_RG=$(yq '.settings.workspace-resource-group' deployment-config.yaml)
+            echo "location=${LOCATION}" >> $GITHUB_OUTPUT
+            echo "workspace_rg=${WORKSPACE_RG}" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::deployment-config.yaml not found. Using default values."
+            echo "location=westeurope" >> $GITHUB_OUTPUT
+            echo "workspace_rg=p-sec-mon" >> $GITHUB_OUTPUT
+          fi
+          echo "Using location: ${LOCATION}, workspace resource group: ${WORKSPACE_RG}"
+        shell: bash
+
+      - name: Plan
+        id: plan
+        uses: innofactororg/bicep-action/.github/actions/plan@v1
+        with:
+          azure_client_id: ${{ vars.AZURE_CLIENT_ID }}
+          azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+          location: ${{ steps.config.outputs.location }}
+          log_severity: INFO
+          resource_group: ${{ steps.config.outputs.workspace_rg }}
+          rule_option: # disable ps-rule
+          scope: group
+          template: bicep/p-sec-mon/main.bicep
+          template_parameters: bicep/p-sec-mon/main.bicepparam
+          version_ace_tool: # disable ace-tool
+
+  deploy:
+    name: Deploy Sentinel
+    # environment: production-locked
+    needs: plan
+    permissions:
+      contents: write # for auto merge
+      id-token: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+
+      - name: Deploy
+        id: deploy
+        uses: innofactororg/bicep-action/.github/actions/deploy@v1
+        with:
+          auto_merge: squash
+          azure_client_id: ${{ vars.AZURE_CLIENT_ID }}
+          azure_providers: ${{ needs.plan.outputs.providers }}
+          azure_provider_wait_count: 30
+          azure_provider_wait_seconds: 10
+          azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+          location: ${{ needs.plan.outputs.location }}
+          log_severity: INFO
+          resource_group: ${{ needs.plan.outputs.workspace_rg }}
+          scope: group
+          template: bicep/p-sec-mon/main.bicep
+          template_parameters: bicep/p-sec-mon/main.bicepparam

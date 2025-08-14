@@ -1,0 +1,53 @@
+// cSpell:disable
+{
+    "bicep.enableSurveys": false,
+    "editor.accessibilitySupport": "off",
+    "editor.bracketPairColorization.enabled": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.detectIndentation": false,
+    "editor.guides.bracketPairs": "active",
+    "editor.tabCompletion": "on",
+    "editor.tabSize": 2,
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 1000,
+    "files.eol": "\n",
+    "git.autofetch": true,
+    "git.confirmSync": false,
+    "git.pruneOnFetch": true,
+    "git.enableSmartCommit": true,
+    "githubPullRequests.pullBranch": "never",
+    "hediet.vscode-drawio.resizeImages": null,
+    "markdown.extension.orderedList.autoRenumber": false,
+    "markdown.extension.toc.levels": "2..6",
+    "powershell.codeFormatting.preset": "OTBS",
+    "terminal.integrated.scrollback": 64000,
+    "workbench.colorTheme": "Default Dark+",
+    "workbench.editor.decorations.badges": true,
+    "workbench.editor.decorations.colors": true,
+    "workbench.editorAssociations": {
+        "*.drawio.png": "hediet.vscode-drawio"
+    },
+    "workbench.startupEditor": "none",
+    "workbench.editor.wrapTabs": true,
+    "[markdown]": {
+        "editor.defaultFormatter": "yzhang.markdown-all-in-one"
+    },
+    "[bicep]": {
+        "editor.defaultFormatter": "ms-azuretools.vscode-bicep"
+    },
+    "[powershell]": {
+        "editor.defaultFormatter": "ms-vscode.powershell",
+        "editor.tabSize": 4
+    },
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features",
+        "editor.tabSize": 4
+    },
+    "[jsonc]": {
+        "editor.defaultFormatter": "vscode.json-language-features",
+        "editor.tabSize": 4
+    },
+    "[yaml]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    }
+}
