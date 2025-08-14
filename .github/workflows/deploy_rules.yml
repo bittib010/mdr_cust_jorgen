@@ -21,7 +21,7 @@ jobs:
       #       echo "Azure CLI setup complete." 
 
       - name: Checkout mdr_root repository
-        uses: actions/checkout@v4  
+        uses: actions/checkout@v5  
         with:
           repository: bittib010/mdr_root
           token: ${{ secrets.PAT_TOKEN }}
