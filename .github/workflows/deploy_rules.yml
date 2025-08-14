@@ -2,7 +2,7 @@ name: Deploy Rules
 
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
-  push:
+  push: # remove when not testing
     branches:
       - master
 
@@ -14,11 +14,11 @@ jobs:
   initialize:
     runs-on: ubuntu-latest
     steps:
-      # - name: Set up Azure CLI
-      #   uses: azure/cli@v2
-      #   with:
-      #     inlineScript: |
-      #       echo "Azure CLI setup complete." 
+      - name: Set up Azure CLI
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            echo "Azure CLI setup complete." 
 
       - name: Checkout mdr_root repository
         uses: actions/checkout@v5  
@@ -30,7 +30,7 @@ jobs:
 
       # Checkout current repository
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with: 
           path: mdr_cust
 
