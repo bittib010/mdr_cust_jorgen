@@ -267,11 +267,18 @@ jobs:
               $techniques = @()
               if ($yaml.relevantTechniques) { $techniques = @($yaml.relevantTechniques) } elseif ($yaml.properties -and $yaml.properties.relevantTechniques) { $techniques = @($yaml.properties.relevantTechniques) }
 
+              # Optional entityMappings
+              $entityMappings = $null
+              if ($yaml.entityMappings) { $entityMappings = $yaml.entityMappings } elseif ($yaml.properties -and $yaml.properties.entityMappings) { $entityMappings = $yaml.properties.entityMappings }
+
               $props = @{
-                displayName       = $name
-                enabled           = $true
-                severity          = $severity
-                query             = $query
+                displayName        = $name
+                enabled            = $true
+                severity           = $severity
+                query              = $query
+                suppressionEnabled = $false
+                suppressionDuration= 'PT5M'
+                eventGroupingSettings = @{ aggregationKind = 'AlertPerResult' }
               }
               if ($kind -eq 'Scheduled') {
                 $props.queryFrequency  = $freq
@@ -281,6 +288,7 @@ jobs:
               }
               if ($tactics -and $tactics.Count -gt 0) { $props.tactics = $tactics }
               if ($techniques -and $techniques.Count -gt 0) { $props.relevantTechniques = $techniques }
+              if ($entityMappings) { $props.entityMappings = $entityMappings }
 
               $body = @{
                 kind       = $kind

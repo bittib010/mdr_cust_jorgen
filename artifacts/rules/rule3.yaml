@@ -11,7 +11,6 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-
   SigninLogs
   | where AppDisplayName contains "Azure Portal"
   // 50126 - Invalid username or password, or invalid on-premises username or password.
@@ -25,7 +24,6 @@ query: |
   by UserDisplayName, UserPrincipalName, AppDisplayName, ResultType, ResultDescription, StatusCode, StatusDetails, Location, State
   | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName
   | sort by AttemptCount
-
 entityMappings:
   - entityType: Account
     fieldMappings:
