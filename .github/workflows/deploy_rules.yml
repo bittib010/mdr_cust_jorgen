@@ -181,16 +181,44 @@ jobs:
       # Deploy selected rules to the customer's Sentinel workspace
       - name: Deploy Sentinel rules
         shell: pwsh
-        env:
-          AZURE_RG: ${{ vars.AZURE_RG }}
-          AZURE_WORKSPACE: ${{ vars.AZURE_WORKSPACE }}
         run: |
-          if (-not $env:AZURE_RG -or -not $env:AZURE_WORKSPACE) {
-            Write-Host "Repository Variables AZURE_RG and AZURE_WORKSPACE are not set. Skipping deployment."
-            exit 0
+          az extension add -n sentinel --yes
+
+          # Resolve RG and Workspace from repo variables or from deployment-config.yaml
+          $rg = $env:AZURE_RG
+          $workspace = $env:AZURE_WORKSPACE
+
+          $cfgPath = "${{ github.workspace }}/mdr_cust/deployment-config.yaml"
+          $cfg = $null
+          if (Test-Path $cfgPath) {
+            try {
+              $cfg = Get-Content -Raw -Path $cfgPath | ConvertFrom-Yaml
+            } catch {
+              Write-Host "Failed to parse deployment-config.yaml"
+            }
           }
 
-          az extension add -n sentinel --yes
+          if (-not $rg -and $cfg -and $cfg.Settings) {
+            $rg = $cfg.Settings.'WorkSpace-Resource-Group'
+          }
+          if (-not $workspace -and $cfg -and $cfg.Settings) {
+            $workspace = $cfg.Settings.'Workspace-Name'
+          }
+
+          if (-not $rg -or -not $workspace) {
+            Write-Error "Target Resource Group and Workspace are not set. Provide repo variables AZURE_RG/AZURE_WORKSPACE or set Settings.WorkSpace-Resource-Group and Settings.Workspace-Name in deployment-config.yaml."
+            exit 1
+          }
+
+          # Build skip lists from config (Deleted and Excluded)
+          $deleted = @{}
+          $excluded = @{}
+          if ($cfg -and $cfg.DeletedRules) {
+            foreach ($r in $cfg.DeletedRules) { if ($r.id) { $deleted[$r.id] = $true } }
+          }
+          if ($cfg -and $cfg.ExcludeRules) {
+            foreach ($r in $cfg.ExcludeRules) { if ($r.id) { $excluded[$r.id] = $true } }
+          }
 
           $csvPath = "${{ github.workspace }}/content.csv"
           if (-not (Test-Path $csvPath)) { Write-Error "content.csv not found"; exit 1 }
@@ -200,6 +228,9 @@ jobs:
             if ($line -match "^(.*?),(.*)$") {
               $relPath = $matches[1]
               $ruleId = $matches[2]
+
+              if ($deleted.ContainsKey($ruleId)) { Write-Host "Skipping Deleted rule: $ruleId"; continue }
+              if ($excluded.ContainsKey($ruleId)) { Write-Host "Skipping Excluded rule: $ruleId"; continue }
 
               $custPath = Join-Path "${{ github.workspace }}/mdr_cust" $relPath
               $basePath = Join-Path "${{ github.workspace }}/mdr_root" $relPath
@@ -223,8 +254,8 @@ jobs:
 
               Write-Host "Upserting $kind rule: $ruleId ($name)"
               az sentinel alert-rule create `
-                --resource-group $env:AZURE_RG `
-                --workspace-name $env:AZURE_WORKSPACE `
+                --resource-group $rg `
+                --workspace-name $workspace `
                 --rule-id $ruleId `
                 --kind $kind `
                 --display-name "$name" `
