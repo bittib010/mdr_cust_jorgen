@@ -287,7 +287,7 @@ jobs:
                 properties = $props
               }
 
-              $url = "https://management.azure.com/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.OperationalInsights/workspaces/$workspace/providers/Microsoft.SecurityInsights/alertRules/$ruleId?api-version=$apiVersion"
+              $baseUrl = "https://management.azure.com/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.OperationalInsights/workspaces/$workspace/providers/Microsoft.SecurityInsights/alertRules/$ruleId"
 
               $tmp = New-TemporaryFile
               $json = $body | ConvertTo-Json -Depth 64
@@ -295,10 +295,10 @@ jobs:
 
               # Debug
               Write-Host "API Version: $apiVersion"
-              Write-Host "PUT URL: $url"
+              Write-Host "PUT base URL: $baseUrl"
               Write-Host "Request body (first 400 chars):" ($json.Substring(0, [Math]::Min(400, $json.Length)))
 
               Write-Host "Upserting $kind rule via REST: $ruleId ($name)"
-              az rest --method put --url $url --headers "Content-Type=application/json" --body @$tmp | Out-Null
+              az rest --method put --url $baseUrl --url-parameters "api-version=$apiVersion" --headers "Content-Type=application/json" --body @$tmp | Out-Null
             }
           }
