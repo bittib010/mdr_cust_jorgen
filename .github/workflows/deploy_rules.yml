@@ -198,30 +198,23 @@ jobs:
             }
           }
 
-          if (-not $rg -and $cfg -and $cfg.Settings) {
-            $rg = $cfg.Settings.'WorkSpace-Resource-Group'
-          }
-          if (-not $workspace -and $cfg -and $cfg.Settings) {
-            $workspace = $cfg.Settings.'Workspace-Name'
-          }
+          if (-not $rg -and $cfg -and $cfg.Settings) { $rg = $cfg.Settings.'WorkSpace-Resource-Group' }
+          if (-not $workspace -and $cfg -and $cfg.Settings) { $workspace = $cfg.Settings.'Workspace-Name' }
 
-          if (-not $rg -or -not $workspace) {
-            Write-Error "Target Resource Group and Workspace are not set. Provide repo variables AZURE_RG/AZURE_WORKSPACE or set Settings.WorkSpace-Resource-Group and Settings.Workspace-Name in deployment-config.yaml."
-            exit 1
-          }
+          if (-not $rg -or -not $workspace) { Write-Error "Target Resource Group and Workspace are not set."; exit 1 }
 
           # Build skip lists from config (Deleted and Excluded)
           $deleted = @{}
           $excluded = @{}
-          if ($cfg -and $cfg.DeletedRules) {
-            foreach ($r in $cfg.DeletedRules) { if ($r.id) { $deleted[$r.id] = $true } }
-          }
-          if ($cfg -and $cfg.ExcludeRules) {
-            foreach ($r in $cfg.ExcludeRules) { if ($r.id) { $excluded[$r.id] = $true } }
-          }
+          if ($cfg -and $cfg.DeletedRules) { foreach ($r in $cfg.DeletedRules) { if ($r.id) { $deleted[$r.id] = $true } } }
+          if ($cfg -and $cfg.ExcludeRules) { foreach ($r in $cfg.ExcludeRules) { if ($r.id) { $excluded[$r.id] = $true } } }
 
           $csvPath = "${{ github.workspace }}/content.csv"
           if (-not (Test-Path $csvPath)) { Write-Error "content.csv not found"; exit 1 }
+
+          # Debug: show context
+          Write-Host "Active subscription:" (az account show --query id -o tsv)
+          Write-Host "Target RG: $rg; Workspace: $workspace"
 
           $subId = az account show --query id -o tsv
           $apiVersion = '2024-01-01-preview'
@@ -270,11 +263,9 @@ jobs:
 
               # Optional tactics/techniques
               $tactics = @()
-              if ($yaml.tactics) { $tactics = @($yaml.tactics) }
-              elseif ($yaml.properties -and $yaml.properties.tactics) { $tactics = @($yaml.properties.tactics) }
+              if ($yaml.tactics) { $tactics = @($yaml.tactics) } elseif ($yaml.properties -and $yaml.properties.tactics) { $tactics = @($yaml.properties.tactics) }
               $techniques = @()
-              if ($yaml.relevantTechniques) { $techniques = @($yaml.relevantTechniques) }
-              elseif ($yaml.properties -and $yaml.properties.relevantTechniques) { $techniques = @($yaml.properties.relevantTechniques) }
+              if ($yaml.relevantTechniques) { $techniques = @($yaml.relevantTechniques) } elseif ($yaml.properties -and $yaml.properties.relevantTechniques) { $techniques = @($yaml.properties.relevantTechniques) }
 
               $props = @{
                 displayName       = $name
@@ -282,14 +273,12 @@ jobs:
                 severity          = $severity
                 query             = $query
               }
-
               if ($kind -eq 'Scheduled') {
                 $props.queryFrequency  = $freq
                 $props.queryPeriod     = $period
                 $props.triggerOperator = $trigOp
                 $props.triggerThreshold= [int]$trigTh
               }
-
               if ($tactics -and $tactics.Count -gt 0) { $props.tactics = $tactics }
               if ($techniques -and $techniques.Count -gt 0) { $props.relevantTechniques = $techniques }
 
@@ -301,9 +290,15 @@ jobs:
               $url = "https://management.azure.com/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.OperationalInsights/workspaces/$workspace/providers/Microsoft.SecurityInsights/alertRules/$ruleId?api-version=$apiVersion"
 
               $tmp = New-TemporaryFile
-              $body | ConvertTo-Json -Depth 64 | Out-File -FilePath $tmp -Encoding utf8
+              $json = $body | ConvertTo-Json -Depth 64
+              $json | Out-File -FilePath $tmp -Encoding utf8
+
+              # Debug
+              Write-Host "API Version: $apiVersion"
+              Write-Host "PUT URL: $url"
+              Write-Host "Request body (first 400 chars):" ($json.Substring(0, [Math]::Min(400, $json.Length)))
 
               Write-Host "Upserting $kind rule via REST: $ruleId ($name)"
-              az rest --method put --uri $url --headers "Content-Type=application/json" --body @$tmp | Out-Null
+              az rest --method put --url $url --headers "Content-Type=application/json" --body @$tmp | Out-Null
             }
           }
