@@ -182,6 +182,7 @@ jobs:
       - name: Deploy Sentinel rules
         shell: pwsh
         run: |
+          Import-Module powershell-yaml -ErrorAction Stop
           az extension add -n sentinel --yes
 
           # Resolve RG and Workspace from repo variables or from deployment-config.yaml
@@ -238,15 +239,29 @@ jobs:
               if (Test-Path $custPath) { $fullPath = $custPath } elseif (Test-Path $basePath) { $fullPath = $basePath }
               if (-not $fullPath) { Write-Host "Skipping missing file: $relPath"; continue }
 
-              try { $yaml = Get-Content -Raw -Path $fullPath | ConvertFrom-Yaml } catch { Write-Host "YAML parse failed: $fullPath"; continue }
+              try { $yamlRaw = Get-Content -Raw -Path $fullPath | ConvertFrom-Yaml } catch { Write-Host "YAML parse failed: $fullPath"; continue }
+
+              # Normalize YAML: handle multi-document or array results
+              $docs = @()
+              if ($yamlRaw -is [System.Collections.IEnumerable] -and -not ($yamlRaw -is [hashtable]) -and -not ($yamlRaw -is [pscustomobject])) {
+                $docs = @($yamlRaw)
+              } else {
+                $docs = @($yamlRaw)
+              }
+              $yaml = $docs | Where-Object { $_.id -or $_.kind -or $_.query -or $_.name -or ($_.properties -and $_.properties.query) } | Select-Object -First 1
+              if (-not $yaml) { Write-Host "No suitable YAML doc found in: $relPath"; continue }
 
               $kind = $yaml.kind
+              if (-not $kind -and $yaml.properties) { $kind = $yaml.properties.kind }
+
               if (-not $kind) { Write-Host "Skipping non-alert rule (no kind): $ruleId"; continue }
               if ($kind -notin @('Scheduled','NRT')) { Write-Host "Skipping unsupported kind '$kind' for: $ruleId"; continue }
 
-              $name = if ($yaml.displayName) { $yaml.displayName } else { $yaml.name }
-              $severity = if ($yaml.severity) { $yaml.severity } else { 'Informational' }
+              $name = if ($yaml.displayName) { $yaml.displayName } elseif ($yaml.name) { $yaml.name } elseif ($yaml.properties -and $yaml.properties.displayName) { $yaml.properties.displayName } else { $null }
+              $severity = if ($yaml.severity) { $yaml.severity } elseif ($yaml.properties -and $yaml.properties.severity) { $yaml.properties.severity } else { 'Informational' }
+
               $query = $yaml.query
+              if (-not $query -and $yaml.properties) { $query = $yaml.properties.query }
               if (-not $query) { Write-Host "No query found for: $ruleId"; continue }
 
               # Escape quotes to avoid CLI parsing issues
