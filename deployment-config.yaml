@@ -9,5 +9,8 @@ Connectors:
       - id: AzureActiveDirectory
         enabled: true
         comment: "Optional comment"
+      - id: AADNonInteractiveUserSignInLogs
+        enabled: true
+        comment: "Optional comment"
 
 
