@@ -183,7 +183,7 @@ jobs:
         shell: pwsh
         run: |
           Import-Module powershell-yaml -ErrorAction Stop
-          az extension add -n sentinel --yes
+          az extension add -n sentinel --yes --allow-preview true
 
           # Resolve RG and Workspace from repo variables or from deployment-config.yaml
           $rg = $env:AZURE_RG
@@ -253,6 +253,11 @@ jobs:
 
               $kind = $yaml.kind
               if (-not $kind -and $yaml.properties) { $kind = $yaml.properties.kind }
+              # Infer kind from path if missing
+              if (-not $kind) {
+                if ($relPath -match '/rules/scheduled/') { $kind = 'Scheduled' }
+                elseif ($relPath -match '/rules/nrt/') { $kind = 'NRT' }
+              }
 
               if (-not $kind) { Write-Host "Skipping non-alert rule (no kind): $ruleId"; continue }
               if ($kind -notin @('Scheduled','NRT')) { Write-Host "Skipping unsupported kind '$kind' for: $ruleId"; continue }
@@ -264,18 +269,40 @@ jobs:
               if (-not $query -and $yaml.properties) { $query = $yaml.properties.query }
               if (-not $query) { Write-Host "No query found for: $ruleId"; continue }
 
+              # Defaults required for Scheduled rules
+              $freq = if ($yaml.queryFrequency) { $yaml.queryFrequency } elseif ($yaml.properties -and $yaml.properties.queryFrequency) { $yaml.properties.queryFrequency } else { 'PT1H' }
+              $period = if ($yaml.queryPeriod) { $yaml.queryPeriod } elseif ($yaml.properties -and $yaml.properties.queryPeriod) { $yaml.properties.queryPeriod } else { $freq }
+              $trigOp = if ($yaml.triggerOperator) { $yaml.triggerOperator } elseif ($yaml.properties -and $yaml.properties.triggerOperator) { $yaml.properties.triggerOperator } else { 'GreaterThan' }
+              $trigTh = if ($null -ne $yaml.triggerThreshold) { $yaml.triggerThreshold } elseif ($yaml.properties -and $null -ne $yaml.properties.triggerThreshold) { $yaml.properties.triggerThreshold } else { 0 }
+
               # Escape quotes to avoid CLI parsing issues
               $queryEscaped = $query -replace '"', '\"'
 
               Write-Host "Upserting $kind rule: $ruleId ($name)"
-              az sentinel alert-rule create `
-                --resource-group $rg `
-                --workspace-name $workspace `
-                --rule-id $ruleId `
-                --kind $kind `
-                --display-name "$name" `
-                --severity $severity `
-                --query "$queryEscaped" `
-                --enabled true
+              if ($kind -eq 'Scheduled') {
+                az sentinel alert-rule create `
+                  --resource-group $rg `
+                  --workspace-name $workspace `
+                  --rule-id $ruleId `
+                  --kind $kind `
+                  --display-name "$name" `
+                  --severity $severity `
+                  --query "$queryEscaped" `
+                  --query-frequency $freq `
+                  --query-period $period `
+                  --trigger-operator $trigOp `
+                  --trigger-threshold $trigTh `
+                  --enabled true
+              } else {
+                az sentinel alert-rule create `
+                  --resource-group $rg `
+                  --workspace-name $workspace `
+                  --rule-id $ruleId `
+                  --kind $kind `
+                  --display-name "$name" `
+                  --severity $severity `
+                  --query "$queryEscaped" `
+                  --enabled true
+              }
             }
           }
