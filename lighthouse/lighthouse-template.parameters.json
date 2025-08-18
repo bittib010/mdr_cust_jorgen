@@ -1,0 +1,30 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "AnalystsGroupID": {
+            "value": ""
+        },
+        "AutomationServicePrincipalID": {
+            "value": ""
+        },
+        "AutomationServicePrincipalName": {
+            "value": "AZ_SP_InnofactorMDR_<CUSTOMER NAME>_SecurityAutomation"
+        },
+        "EngineersGroupID": {
+            "value": ""
+        },
+        "ManagersGroupID": {
+            "value": ""
+        },
+        "ReaderGroupID": {
+            "value": ""
+        },
+        "SentinelResourceGroup": {
+            "value": "p-<CUSTOMER NAME>-sec-mon"
+        },
+        "SecurityAutomationResourceGroup": {
+            "value": "p-<CUSTOMER NAME>-sec-auto"
+        }
+    }
+}
