@@ -1,0 +1,350 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.33.93.31351",
+      "templateHash": "1906601031076934766"
+    }
+  },
+  "parameters": {
+    "AnalystsGroupID": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. The Microsoft Entra group id that is granted Analysts authorizations."
+      }
+    },
+    "AutomationServicePrincipalID": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. The Microsoft Entra Enterprise Application service principal id that is granted Automation authorizations."
+      }
+    },
+    "AutomationServicePrincipalName": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. The Microsoft Entra service principal name that is granted Automation authorizations."
+      }
+    },
+    "EngineersGroupID": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. The Microsoft Entra group id that is granted Engineers authorizations."
+      }
+    },
+    "ManagersGroupID": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. The Microsoft Entra group id that is granted Managed Services Registration Assignment Delete Role."
+      }
+    },
+    "PIMApproversGroupID": {
+      "type": "string",
+      "defaultValue": "[parameters('ManagersGroupID')]",
+      "metadata": {
+        "description": "Optional. The Microsoft Entra group id that is able to approve PIM requests from users that need an elevated role."
+      }
+    },
+    "ReaderGroupID": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. The Microsoft Entra group id that is granted reader authorizations."
+      }
+    },
+    "SentinelResourceGroup": {
+      "type": "string",
+      "defaultValue": "p-sec-mon",
+      "metadata": {
+        "description": "Required. The name of the resource group where the SOC is permitted to deploy Microsoft Sentinel."
+      }
+    },
+    "SecurityAutomationResourceGroup": {
+      "type": "string",
+      "defaultValue": "p-sec-auto",
+      "metadata": {
+        "description": "Optional. The name of the resource group where the SOC is permitted to deploy Security Automation resources."
+      }
+    }
+  },
+  "variables": {
+    "mspOfferName": "Innofactor MDR",
+    "mspOfferDescription": "Innofactor MDR Security Monitoring service.",
+    "managedByTenantId": "a4ca0bdd-5180-488b-bd55-cc8dbccc403e",
+    "groupMap": {
+      "socPIMApprovers": {
+        "name": "Innofactor MDR PIM Approvers",
+        "id": "[parameters('PIMApproversGroupID')]"
+      },
+      "socManagers": {
+        "name": "Innofactor MDR Service Managers",
+        "id": "[parameters('ManagersGroupID')]"
+      },
+      "socAnalysts": {
+        "name": "Innofactor MDR Security Analysts",
+        "id": "[parameters('AnalystsGroupID')]"
+      },
+      "socEngineers": {
+        "name": "Innofactor MDR Security Engineers",
+        "id": "[parameters('EngineersGroupID')]"
+      },
+      "socReaders": {
+        "name": "Innofactor MDR Readers",
+        "id": "[parameters('ReaderGroupID')]"
+      }
+    },
+    "roleMap": {
+      "Reader": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+      "LogAnalyticsContributor": "92aaf0da-9dab-42b6-94a3-d43ce8d16293",
+      "LogicAppContributor": "87a39d53-fc1b-424a-814c-f7e04687dc9e",
+      "ManagedServicesRegistrationAssignmentDeleteRole": "91c1777a-f3dc-4fae-b103-61d183457e46",
+      "MicrosoftSentinelContributor": "ab8e14d6-4a74-4a29-9ba8-549422addade",
+      "MicrosoftSentinelPlaybookOperator": "51d6186e-6489-4900-b93f-92e23144cca5",
+      "MicrosoftSentinelReader": "8d289c81-5878-46d4-8554-54e1e3d8b5cb",
+      "MicrosoftSentinelResponder": "3e150937-b8fe-4cfb-8069-0eaf05ecd056",
+      "MicrosoftSentinelAutomationContributor": "f4c81013-99ee-4d62-a7ee-b3f1f648599a"
+    },
+    "accessPolicy": {
+      "Azure8hSelfApproval": {
+        "multiFactorAuthProvider": "Azure",
+        "maximumActivationDuration": "PT8H",
+        "managedByTenantApprovers": []
+      },
+      "Azure8hApprovalRequired": {
+        "multiFactorAuthProvider": "Azure",
+        "maximumActivationDuration": "PT8H",
+        "managedByTenantApprovers": [
+          {
+            "principalId": "[variables('groupMap').socPIMApprovers.id]",
+            "principalIdDisplayName": "[variables('groupMap').socPIMApprovers.name]"
+          }
+        ]
+      }
+    },
+    "authorizations": [
+      {
+        "principalId": "[variables('groupMap').socManagers.id]",
+        "principalIdDisplayName": "[variables('groupMap').socManagers.name]",
+        "roleDefinitionId": "[variables('roleMap').ManagedServicesRegistrationAssignmentDeleteRole]"
+      },
+      {
+        "principalId": "[variables('groupMap').socAnalysts.id]",
+        "principalIdDisplayName": "[variables('groupMap').socAnalysts.name]",
+        "roleDefinitionId": "[variables('roleMap').MicrosoftSentinelPlaybookOperator]"
+      },
+      {
+        "principalId": "[variables('groupMap').socAnalysts.id]",
+        "principalIdDisplayName": "[variables('groupMap').socAnalysts.name]",
+        "roleDefinitionId": "[variables('roleMap').MicrosoftSentinelResponder]"
+      },
+      {
+        "principalId": "[variables('groupMap').socAnalysts.id]",
+        "principalIdDisplayName": "[variables('groupMap').socAnalysts.name]",
+        "roleDefinitionId": "[variables('roleMap').Reader]"
+      },
+      {
+        "principalId": "[parameters('AutomationServicePrincipalID')]",
+        "principalIdDisplayName": "[parameters('AutomationServicePrincipalName')]",
+        "roleDefinitionId": "[variables('roleMap').LogAnalyticsContributor]"
+      },
+      {
+        "principalId": "7d4886db-4170-4977-9284-cadb7b716090", // SP (Azure Security Insights) located in the MDR tenant
+        "principalIdDisplayName": "Azure Security Insights",
+        "roleDefinitionId": "[variables('roleMap').MicrosoftSentinelAutomationContributor]"
+      },
+      {
+        "principalId": "[parameters('AutomationServicePrincipalID')]",
+        "principalIdDisplayName": "[parameters('AutomationServicePrincipalName')]",
+        "roleDefinitionId": "[variables('roleMap').LogicAppContributor]"
+      },
+      {
+        "principalId": "[parameters('AutomationServicePrincipalID')]",
+        "principalIdDisplayName": "[parameters('AutomationServicePrincipalName')]",
+        "roleDefinitionId": "[variables('roleMap').MicrosoftSentinelContributor]"
+      },
+      {
+        "principalId": "[variables('groupMap').socEngineers.id]",
+        "principalIdDisplayName": "[variables('groupMap').socEngineers.name]",
+        "roleDefinitionId": "[variables('roleMap').Reader]"
+      },
+      {
+        "principalId": "[variables('groupMap').socEngineers.id]",
+        "principalIdDisplayName": "[variables('groupMap').socEngineers.name]",
+        "roleDefinitionId": "[variables('roleMap').MicrosoftSentinelReader]"
+      },
+      {
+        "principalId": "[variables('groupMap').socReaders.id]",
+        "principalIdDisplayName": "[variables('groupMap').socReaders.name]",
+        "roleDefinitionId": "[variables('roleMap').MicrosoftSentinelReader]"
+      },
+      {
+        "principalId": "[variables('groupMap').socReaders.id]",
+        "principalIdDisplayName": "[variables('groupMap').socReaders.name]",
+        "roleDefinitionId": "[variables('roleMap').Reader]"
+      }
+    ],
+    "eligibleAuthorizations": [
+      {
+        "principalId": "[variables('groupMap').socManagers.id]",
+        "principalIdDisplayName": "[variables('groupMap').socManagers.name]",
+        "roleDefinitionId": "[variables('roleMap').MicrosoftSentinelReader]",
+        "justInTimeAccessPolicy": "[variables('accessPolicy').Azure8hSelfApproval]"
+      },
+      {
+        "principalId": "[variables('groupMap').socEngineers.id]",
+        "principalIdDisplayName": "[variables('groupMap').socEngineers.name]",
+        "roleDefinitionId": "[variables('roleMap').LogicAppContributor]",
+        "justInTimeAccessPolicy": "[variables('accessPolicy').Azure8hSelfApproval]"
+      },
+      {
+        "principalId": "[variables('groupMap').socEngineers.id]",
+        "principalIdDisplayName": "[variables('groupMap').socEngineers.name]",
+        "roleDefinitionId": "[variables('roleMap').MicrosoftSentinelContributor]",
+        "justInTimeAccessPolicy": "[variables('accessPolicy').Azure8hSelfApproval]"
+      }
+    ]
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedServices/registrationDefinitions",
+      "apiVersion": "2022-10-01",
+      "name": "[guid(format('{0}', variables('mspOfferName')))]",
+      "properties": {
+        "registrationDefinitionName": "[variables('mspOfferName')]",
+        "description": "[variables('mspOfferDescription')]",
+        "managedByTenantId": "[variables('managedByTenantId')]",
+        "authorizations": "[variables('authorizations')]",
+        "eligibleAuthorizations": "[variables('eligibleAuthorizations')]"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('{0}-sentinel', deployment().name)]",
+      "resourceGroup": "[parameters('SentinelResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "registrationDefinitionId": {
+            "value": "[subscriptionResourceId('Microsoft.ManagedServices/registrationDefinitions', guid(format('{0}', variables('mspOfferName'))))]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.33.93.31351",
+              "templateHash": "868243695879141946"
+            }
+          },
+          "parameters": {
+            "registrationDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. The fully qualified path of the registration definition."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedServices/registrationAssignments",
+              "apiVersion": "2022-10-01",
+              "name": "[guid(format('{0}-{1}', parameters('registrationDefinitionId'), deployment().name))]",
+              "properties": {
+                "registrationDefinitionId": "[parameters('registrationDefinitionId')]"
+              }
+            }
+          ],
+          "outputs": {
+            "assignment": {
+              "type": "object",
+              "value": "[reference(resourceId('Microsoft.ManagedServices/registrationAssignments', guid(format('{0}-{1}', parameters('registrationDefinitionId'), deployment().name))), '2022-10-01', 'full')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.ManagedServices/registrationDefinitions', guid(format('{0}', variables('mspOfferName'))))]"
+      ]
+    },
+    {
+      "condition": "[not(equals(parameters('SecurityAutomationResourceGroup'), ''))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('{0}-auto', deployment().name)]",
+      "resourceGroup": "[parameters('SecurityAutomationResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "registrationDefinitionId": {
+            "value": "[subscriptionResourceId('Microsoft.ManagedServices/registrationDefinitions', guid(format('{0}', variables('mspOfferName'))))]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.33.93.31351",
+              "templateHash": "868243695879141946"
+            }
+          },
+          "parameters": {
+            "registrationDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. The fully qualified path of the registration definition."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedServices/registrationAssignments",
+              "apiVersion": "2022-10-01",
+              "name": "[guid(format('{0}-{1}', parameters('registrationDefinitionId'), deployment().name))]",
+              "properties": {
+                "registrationDefinitionId": "[parameters('registrationDefinitionId')]"
+              }
+            }
+          ],
+          "outputs": {
+            "assignment": {
+              "type": "object",
+              "value": "[reference(resourceId('Microsoft.ManagedServices/registrationAssignments', guid(format('{0}-{1}', parameters('registrationDefinitionId'), deployment().name))), '2022-10-01', 'full')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.ManagedServices/registrationDefinitions', guid(format('{0}', variables('mspOfferName'))))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "mspOfferName": {
+      "type": "string",
+      "value": "[format('Managed by {0}', variables('mspOfferName'))]"
+    },
+    "mspRegistrationId": {
+      "type": "string",
+      "value": "[subscriptionResourceId('Microsoft.ManagedServices/registrationDefinitions', guid(format('{0}', variables('mspOfferName'))))]"
+    },
+    "authorizations": {
+      "type": "array",
+      "value": "[variables('authorizations')]"
+    },
+    "eligibleAuthorizations": {
+      "type": "array",
+      "value": "[variables('eligibleAuthorizations')]"
+    }
+  }
+}
