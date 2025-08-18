@@ -2,26 +2,26 @@ name: Deploy Rules
 
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
-  push:
+  push: # remove when not testing
     branches:
       - master
 
 
-# env:
-#   CONFIG_FILE: deployment-config.yaml
+env:
+  CONFIG_FILE: deployment-config.yaml
 
 jobs:
   initialize:
     runs-on: ubuntu-latest
     steps:
-      # - name: Set up Azure CLI
-      #   uses: azure/cli@v2
-      #   with:
-      #     inlineScript: |
-      #       echo "Azure CLI setup complete." 
+      - name: Set up Azure CLI
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            echo "Azure CLI setup complete." 
 
       - name: Checkout mdr_root repository
-        uses: actions/checkout@v4  
+        uses: actions/checkout@v5  
         with:
           repository: bittib010/mdr_root
           token: ${{ secrets.PAT_TOKEN }}
@@ -30,9 +30,15 @@ jobs:
 
       # Checkout current repository
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with: 
           path: mdr_cust
+
+      # Authenticate to Azure using the customer service principal JSON stored in AZURE_CREDENTIALS
+      - name: Azure login (customer tenant)
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
 
       - name: Install PowerShell Modules
@@ -139,7 +145,9 @@ jobs:
           # Update CSV content file by rewriting it with header and new content
           $csvLines = @("Path,ID")
           foreach ($key in $csvContent.Keys) {
-              $csvLines += "$($csvContent[$key]),$key"
+              $csvLines += "$(
+                $csvContent[$key]
+              ),$key"
           }
           
           # Process ExcludeRules from deployment-config.yaml
@@ -157,7 +165,9 @@ jobs:
                       # Rebuild CSV content after exclusion
                       $csvLines = @("Path,ID")
                       foreach ($key in $csvContent.Keys) {
-                          $csvLines += "$($csvContent[$key]),$key"
+                          $csvLines += "$(
+                            $csvContent[$key]
+                          ),$key"
                       }
                   }
               }
@@ -167,3 +177,146 @@ jobs:
           }
           
           $csvLines | Out-File -FilePath $csvPath -Encoding utf8
+
+      # Deploy selected rules to the customer's Sentinel workspace
+      - name: Deploy Sentinel rules
+        shell: pwsh
+        run: |
+          Import-Module powershell-yaml -ErrorAction Stop
+          
+          # Resolve RG and Workspace from repo variables or from deployment-config.yaml
+          $rg = $env:AZURE_RG
+          $workspace = $env:AZURE_WORKSPACE
+          
+          $cfgPath = "${{ github.workspace }}/mdr_cust/deployment-config.yaml"
+          $cfg = $null
+          if (Test-Path $cfgPath) {
+            try { $cfg = Get-Content -Raw -Path $cfgPath | ConvertFrom-Yaml } catch { Write-Host "Failed to parse deployment-config.yaml" }
+          }
+          
+          if (-not $rg -and $cfg -and $cfg.Settings) { $rg = $cfg.Settings.'WorkSpace-Resource-Group' }
+          if (-not $workspace -and $cfg -and $cfg.Settings) { $workspace = $cfg.Settings.'Workspace-Name' }
+          
+          if (-not $rg -or -not $workspace) { Write-Error "Target Resource Group and Workspace are not set."; exit 1 }
+          
+          # Build skip lists from config (Deleted and Excluded)
+          $deleted = @{
+          }
+          $excluded = @{
+          }
+          if ($cfg -and $cfg.DeletedRules) { foreach ($r in $cfg.DeletedRules) { if ($r.id) { $deleted[$r.id] = $true } } }
+          if ($cfg -and $cfg.ExcludeRules) { foreach ($r in $cfg.ExcludeRules) { if ($r.id) { $excluded[$r.id] = $true } } }
+          
+          $csvPath = "${{ github.workspace }}/content.csv"
+          if (-not (Test-Path $csvPath)) { Write-Error "content.csv not found"; exit 1 }
+          
+          # Debug: show context
+          Write-Host "Active subscription:" (az account show --query id -o tsv)
+          Write-Host "Target RG: $rg; Workspace: $workspace"
+          
+          $subId = az account show --query id -o tsv
+          $apiVersion = '2024-03-01'
+          
+          $lines = Get-Content -Path $csvPath | Select-Object -Skip 1
+          foreach ($line in $lines) {
+            if ($line -match "^(.*?),(.*)$") {
+              $relPath = $matches[1]
+              $ruleId = $matches[2]
+              
+              if ($deleted.ContainsKey($ruleId)) { Write-Host "Skipping Deleted rule: $ruleId"; continue }
+              if ($excluded.ContainsKey($ruleId)) { Write-Host "Skipping Excluded rule: $ruleId"; continue }
+              
+              $custPath = Join-Path "${{ github.workspace }}/mdr_cust" $relPath
+              $basePath = Join-Path "${{ github.workspace }}/mdr_root" $relPath
+              $fullPath = $null
+              if (Test-Path $custPath) { $fullPath = $custPath } elseif (Test-Path $basePath) { $fullPath = $basePath }
+              if (-not $fullPath) { Write-Host "Skipping missing file: $relPath"; continue }
+              
+              try { $yamlRaw = Get-Content -Raw -Path $fullPath | ConvertFrom-Yaml } catch { Write-Host "YAML parse failed: $fullPath"; continue }
+              
+              # Normalize YAML: handle multi-document or array results
+              $docs = @()
+              if ($yamlRaw -is [System.Collections.IEnumerable] -and -not ($yamlRaw -is [hashtable]) -and -not ($yamlRaw -is [pscustomobject])) { $docs = @($yamlRaw) } else { $docs = @($yamlRaw) }
+              $yaml = $docs | Where-Object { $_.id -or $_.kind -or $_.query -or $_.name -or ($_.properties -and $_.properties.query) } | Select-Object -First 1
+              if (-not $yaml) { Write-Host "No suitable YAML doc found in: $relPath"; continue }
+              
+              $kind = $yaml.kind
+              if (-not $kind -and $yaml.properties) { $kind = $yaml.properties.kind }
+              if (-not $kind) { Write-Host "Skipping non-alert rule (no kind): $ruleId"; continue }
+              if ($kind -notin @('Scheduled','NRT')) { Write-Host "Skipping unsupported kind '$kind' for: $ruleId"; continue }
+              
+              $name = if ($yaml.displayName) { $yaml.displayName } elseif ($yaml.name) { $yaml.name } elseif ($yaml.properties -and $yaml.properties.displayName) { $yaml.properties.displayName } else { $null }
+              $severity = if ($yaml.severity) { $yaml.severity } elseif ($yaml.properties -and $yaml.properties.severity) { $yaml.properties.severity } else { 'Informational' }
+              $query = $yaml.query
+              if (-not $query -and $yaml.properties) { $query = $yaml.properties.query }
+              if (-not $query) { Write-Host "No query found for: $ruleId"; continue }
+              
+              # Defaults required for Scheduled rules
+              $freq = if ($yaml.queryFrequency) { $yaml.queryFrequency } elseif ($yaml.properties -and $yaml.properties.queryFrequency) { $yaml.properties.queryFrequency } else { 'PT1H' }
+              $period = if ($yaml.queryPeriod) { $yaml.queryPeriod } elseif ($yaml.properties -and $yaml.properties.queryPeriod) { $yaml.properties.queryPeriod } else { $freq }
+              $trigOp = if ($yaml.triggerOperator) { $yaml.triggerOperator } elseif ($yaml.properties -and $yaml.properties.triggerOperator) { $yaml.properties.triggerOperator } else { 'GreaterThan' }
+              $trigTh = if ($null -ne $yaml.triggerThreshold) { $yaml.triggerThreshold } elseif ($yaml.properties -and $null -ne $yaml.properties.triggerThreshold) { $yaml.properties.triggerThreshold } else { 0 }
+              
+              # Optional tactics/techniques
+              $tactics = @(); if ($yaml.tactics) { $tactics = @($yaml.tactics) } elseif ($yaml.properties -and $yaml.properties.tactics) { $tactics = @($yaml.properties.tactics) }
+              $techniques = @(); if ($yaml.relevantTechniques) { $techniques = @($yaml.relevantTechniques) } elseif ($yaml.properties -and $yaml.properties.relevantTechniques) { $techniques = @($yaml.properties.relevantTechniques) }
+              
+              # Optional entityMappings
+              $entityMappings = $null
+              if ($yaml.entityMappings) { $entityMappings = $yaml.entityMappings } elseif ($yaml.properties -and $yaml.properties.entityMappings) { $entityMappings = $yaml.properties.entityMappings }
+              
+              $props = @{
+                displayName         = $name
+                enabled             = $true
+                severity            = $severity
+                query               = $query
+                suppressionEnabled  = $false
+                suppressionDuration = 'PT5M'
+                eventGroupingSettings= @{ aggregationKind = 'AlertPerResult' }
+              }
+              if ($kind -eq 'Scheduled') {
+                $props.queryFrequency   = $freq
+                $props.queryPeriod      = $period
+                $props.triggerOperator  = $trigOp
+                $props.triggerThreshold = [int]$trigTh
+              }
+              if ($tactics -and $tactics.Count -gt 0) { $props.tactics = $tactics }
+              if ($techniques -and $techniques.Count -gt 0) { $props.relevantTechniques = $techniques }
+              if ($entityMappings) { $props.entityMappings = $entityMappings }
+              
+              $body = @{ kind = $kind; properties = $props }
+              
+              $baseUrl = "https://management.azure.com/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.OperationalInsights/workspaces/$workspace/providers/Microsoft.SecurityInsights/alertRules/$ruleId"
+              
+              $tmp = New-TemporaryFile
+              $json = $body | ConvertTo-Json -Depth 64
+              $json | Out-File -FilePath $tmp -Encoding utf8
+              
+              # Debug
+              Write-Host "API Version: $apiVersion"
+              Write-Host "PUT base URL: $baseUrl"
+              Write-Host "Request body (first 400 chars):" ($json.Substring(0, [Math]::Min(400, $json.Length)))
+              
+              Write-Host "Upserting $kind rule via REST: $ruleId ($name)"
+              $putOut = az rest --method put --url $baseUrl --url-parameters "api-version=$apiVersion" --headers "Content-Type=application/json" --body @$tmp 2>&1
+              $putCode = $LASTEXITCODE
+              Write-Host "PUT exit code: $putCode"
+              Write-Host "PUT response (first 400 chars):" (($putOut | Out-String).Substring(0, [Math]::Min(400, ($putOut | Out-String).Length)))
+              if ($putCode -ne 0) { Write-Error "PUT failed"; exit $putCode }
+              
+              # Verify GET
+              $getOut = az rest --method get --url $baseUrl --url-parameters "api-version=$apiVersion" 2>&1
+              $getCode = $LASTEXITCODE
+              Write-Host "GET exit code: $getCode"
+              if ($getCode -eq 0) {
+                try {
+                  $obj = $getOut | ConvertFrom-Yaml
+                  Write-Host ("Verified rule: {0} [{1}] {2}" -f $obj.properties.displayName, $obj.kind, $obj.properties.severity)
+                } catch {
+                  Write-Host "GET response (raw first 400 chars):" (($getOut | Out-String).Substring(0,[Math]::Min(400,($getOut | Out-String).Length)))
+                }
+              } else {
+                Write-Host "GET failed (raw first 400 chars):" (($getOut | Out-String).Substring(0,[Math]::Min(400,($getOut | Out-String).Length)))
+              }
+            }
+          }
