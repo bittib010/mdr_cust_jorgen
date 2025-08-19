@@ -3,28 +3,28 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "AnalystsGroupID": {
-            "value": ""
+            "value": "5eb6b03c-e136-4f34-a788-c0bdd7576091"
         },
         "AutomationServicePrincipalID": {
-            "value": ""
+            "value": "d994e00b-fc92-431e-ace4-73e7801025ce" 
         },
         "AutomationServicePrincipalName": {
-            "value": "AZ_SP_InnofactorMDR_<CUSTOMER NAME>_SecurityAutomation"
+            "value": "testlab-prod-securityautomation-sp"
         },
         "EngineersGroupID": {
-            "value": ""
+            "value": "6cf8c750-39d6-43b8-9ad7-7021380781a1"
         },
         "ManagersGroupID": {
-            "value": ""
+            "value": "85bea3c0-d2bc-4c66-b99b-c5d2fee68870"
         },
         "ReaderGroupID": {
-            "value": ""
+            "value": "c6be5c47-afad-4a22-98db-6aa5ab8a99ef"
         },
         "SentinelResourceGroup": {
-            "value": "p-<CUSTOMER NAME>-sec-mon"
+            "value": "testlab-prod-weu-mon-rg"
         },
         "SecurityAutomationResourceGroup": {
-            "value": "p-<CUSTOMER NAME>-sec-auto"
+            "value": "testlab-prod-weu-auto-rg"
         }
     }
 }
