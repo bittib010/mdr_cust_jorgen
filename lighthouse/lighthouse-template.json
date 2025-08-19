@@ -54,42 +54,42 @@
     },
     "SentinelResourceGroup": {
       "type": "string",
-      "defaultValue": "p-sec-mon",
+      "defaultValue": "contoso-prod-weu-mon-rg",
       "metadata": {
         "description": "Required. The name of the resource group where the SOC is permitted to deploy Microsoft Sentinel."
       }
     },
     "SecurityAutomationResourceGroup": {
       "type": "string",
-      "defaultValue": "p-sec-auto",
+      "defaultValue": "contoso-prod-weu-auto-rg",
       "metadata": {
         "description": "Optional. The name of the resource group where the SOC is permitted to deploy Security Automation resources."
       }
     }
   },
   "variables": {
-    "mspOfferName": "Innofactor MDR",
-    "mspOfferDescription": "Innofactor MDR Security Monitoring service.",
-    "managedByTenantId": "a4ca0bdd-5180-488b-bd55-cc8dbccc403e",
+    "mspOfferName": "Root MDR",
+    "mspOfferDescription": "Root MDR Security Monitoring service.",
+    "managedByTenantId": "4446df3c-2113-4ef6-ae19-982713f574cb",
     "groupMap": {
       "socPIMApprovers": {
-        "name": "Innofactor MDR PIM Approvers",
+        "name": "Root MDR PIM Approvers",
         "id": "[parameters('PIMApproversGroupID')]"
       },
       "socManagers": {
-        "name": "Innofactor MDR Service Managers",
+        "name": "Root MDR Service Managers",
         "id": "[parameters('ManagersGroupID')]"
       },
       "socAnalysts": {
-        "name": "Innofactor MDR Security Analysts",
+        "name": "Root MDR Security Analysts",
         "id": "[parameters('AnalystsGroupID')]"
       },
       "socEngineers": {
-        "name": "Innofactor MDR Security Engineers",
+        "name": "Root MDR Security Engineers",
         "id": "[parameters('EngineersGroupID')]"
       },
       "socReaders": {
-        "name": "Innofactor MDR Readers",
+        "name": "Root MDR Readers",
         "id": "[parameters('ReaderGroupID')]"
       }
     },

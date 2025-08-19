@@ -13,6 +13,9 @@ env:
 jobs:
   initialize:
     runs-on: ubuntu-latest
+    env:
+      CUSTOMER_SUBSCRIPTION_ID: ${{ secrets.CUSTOMER_SUBSCRIPTION_ID }}
+      MDR_AZURE_CREDENTIALS: ${{ secrets.MDR_AZURE_CREDENTIALS }}
     steps:
       - name: Set up Azure CLI
         uses: azure/cli@v2
@@ -34,12 +37,36 @@ jobs:
         with: 
           path: mdr_cust
 
-      # Authenticate to Azure using the customer service principal JSON stored in AZURE_CREDENTIALS
-      - name: Azure login (customer tenant)
+      # OLD: Authenticate to Azure using the customer service principal JSON stored in AZURE_CREDENTIALS
+      # - name: Azure login (customer tenant)
+      #   uses: azure/login@v2
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # New: Authenticate with MDR tenant SP (will use Azure Lighthouse delegated access to target the customer subscription)
+      - name: Azure login (MDR tenant via Lighthouse delegation)
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          creds: ${{ env.MDR_AZURE_CREDENTIALS }}
 
+      - name: Set target subscription (customer via Lighthouse)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CUSTOMER_SUBSCRIPTION_ID:-}" ]; then
+            echo "CUSTOMER_SUBSCRIPTION_ID secret is missing." >&2
+            exit 1
+          fi
+          az account set --subscription "$CUSTOMER_SUBSCRIPTION_ID"
+          echo "Using subscription: $(az account show --query id -o tsv)"
+
+      - name: Verify delegated access
+        shell: bash
+        run: |
+          set -e
+          echo "Active tenant: $(az account show --query tenantId -o tsv)"
+          echo "Available workspaces in subscription (first 5):"
+          az monitor.log-analytics.workspace list --query "[].{name:name, rg:resourceGroup}" -o table | head -n 6 || true
 
       - name: Install PowerShell Modules
         id: install-modules
@@ -61,6 +88,54 @@ jobs:
             Write-Error -Message "Failed to install module [$_]."
             exit 1
           }
+
+      - name: Load customer settings and Lighthouse parameters
+        shell: pwsh
+        run: |
+          Import-Module powershell-yaml -ErrorAction Stop
+          $ErrorActionPreference = 'Stop'
+          $cfgPath = Join-Path "${{ github.workspace }}/mdr_cust" 'deployment-config.yaml'
+          $lhParamPath = Join-Path "${{ github.workspace }}/mdr_cust" 'lighthouse/lighthouse-template.parameters.json'
+
+          $rg = $env:AZURE_RG
+          $workspace = $env:AZURE_WORKSPACE
+          $autoRg = $null
+
+          if (Test-Path $cfgPath) {
+            try {
+              $cfg = Get-Content -Raw -Path $cfgPath | ConvertFrom-Yaml
+              if (-not $rg -and $cfg -and $cfg.Settings) { $rg = $cfg.Settings.'WorkSpace-Resource-Group' }
+              if (-not $workspace -and $cfg -and $cfg.Settings) { $workspace = $cfg.Settings.'Workspace-Name' }
+              if ($cfg -and $cfg.Settings) { $autoRg = $cfg.Settings.'Automation-Resource-Group' }
+            } catch { Write-Host "Failed to parse deployment-config.yaml" }
+          }
+
+          if (Test-Path $lhParamPath) {
+            try {
+              $lh = Get-Content -Raw -Path $lhParamPath | ConvertFrom-Json
+              $lhRg = $lh.parameters.SentinelResourceGroup.value
+              $lhAutoRg = $lh.parameters.SecurityAutomationResourceGroup.value
+              if (-not $rg -and $lhRg) { $rg = $lhRg }
+              if (-not $autoRg -and $lhAutoRg) { $autoRg = $lhAutoRg }
+            } catch { Write-Host "Failed to parse lighthouse-template.parameters.json" }
+          }
+
+          # Fallback: attempt to discover workspace in RG if not provided
+          if (-not $workspace -and $rg) {
+            try {
+              $ws = az monitor log-analytics workspace list -g $rg --query "[0].name" -o tsv 2>$null
+              if ($LASTEXITCODE -eq 0 -and $ws) { $workspace = $ws }
+            } catch {}
+          }
+
+          if (-not $rg -or -not $workspace) {
+            Write-Error "Could not determine AZURE_RG or AZURE_WORKSPACE from config or parameters. Set repo variables AZURE_RG/AZURE_WORKSPACE or fill deployment-config.yaml and lighthouse parameters."
+            exit 1
+          }
+
+          "AZURE_RG=$rg" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "AZURE_WORKSPACE=$workspace" | Out-File -FilePath $env:GITHUB_ENV -Append
+          if ($autoRg) { "AZURE_AUTOMATION_RG=$autoRg" | Out-File -FilePath $env:GITHUB_ENV -Append }
 
       # Loop the /mdr_root folders subfolder: artefacts recursively
       - name: Add base content to artefacts
@@ -178,24 +253,32 @@ jobs:
           
           $csvLines | Out-File -FilePath $csvPath -Encoding utf8
 
-      # Deploy selected rules to the customer's Sentinel workspace
-      - name: Deploy Sentinel rules
+      # OLD: Deploy selected rules to the customer's Sentinel workspace (direct customer SP login)
+      # - name: Deploy Sentinel rules
+      #   shell: pwsh
+      #   run: |
+      #     Import-Module powershell-yaml -ErrorAction Stop
+      #     # ...existing code...
+      #     # Old direct deployment via az rest using customer-tenant service principal
+      #     # ...existing code...
+
+      # New: Deploy selected rules via Azure Lighthouse delegated access
+      - name: Deploy Sentinel rules (via Azure Lighthouse)
         shell: pwsh
         run: |
           Import-Module powershell-yaml -ErrorAction Stop
           
-          # Resolve RG and Workspace from repo variables or from deployment-config.yaml
+          # Resolve RG and Workspace from env (populated by previous step), fallback to config if needed
           $rg = $env:AZURE_RG
           $workspace = $env:AZURE_WORKSPACE
           
           $cfgPath = "${{ github.workspace }}/mdr_cust/deployment-config.yaml"
           $cfg = $null
-          if (Test-Path $cfgPath) {
+          if ((-not $rg -or -not $workspace) -and (Test-Path $cfgPath)) {
             try { $cfg = Get-Content -Raw -Path $cfgPath | ConvertFrom-Yaml } catch { Write-Host "Failed to parse deployment-config.yaml" }
+            if (-not $rg -and $cfg -and $cfg.Settings) { $rg = $cfg.Settings.'WorkSpace-Resource-Group' }
+            if (-not $workspace -and $cfg -and $cfg.Settings) { $workspace = $cfg.Settings.'Workspace-Name' }
           }
-          
-          if (-not $rg -and $cfg -and $cfg.Settings) { $rg = $cfg.Settings.'WorkSpace-Resource-Group' }
-          if (-not $workspace -and $cfg -and $cfg.Settings) { $workspace = $cfg.Settings.'Workspace-Name' }
           
           if (-not $rg -or -not $workspace) { Write-Error "Target Resource Group and Workspace are not set."; exit 1 }
           
@@ -211,7 +294,7 @@ jobs:
           if (-not (Test-Path $csvPath)) { Write-Error "content.csv not found"; exit 1 }
           
           # Debug: show context
-          Write-Host "Active subscription:" (az account show --query id -o tsv)
+          Write-Host "Delegated access subscription:" (az account show --query id -o tsv)
           Write-Host "Target RG: $rg; Workspace: $workspace"
           
           $subId = az account show --query id -o tsv

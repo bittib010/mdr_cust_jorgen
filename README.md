@@ -1,90 +1,82 @@
 # Introduction
-This repository serves as a way to simply deploy Sentinel and content for Sentinel to a customer tenants Sentinel Workspace.
+This repository serves as a way to simply Sentinel content for a customer tenant's Sentinel Workspace.
 
-# Consulent work
-## High overview
-- Run deployment Powershell script to deploy with customer:
-Enter the step to start with:
-  - Add and register resource providers
-  - Create Monitor and Automation Resource Groups
-  - Deploy Lighthouse Template
-  - Create Entra ID Groups and Assign Azure RBAC Roles
-  - Invite External Users and Add Them to Groups
-  - Configure Defender XDR and Custom Role Assignments
-  - Provision Teams (Team and Channels)
-  - Deploy Sentinel
-  - Set Resource Locks and Final Cleanup
-  - Create Entra Groups for the customer
-- Start delivering content on CI/CD:
-  - Runs on a per needed basis.
-
-## Deploy rules and rule updates workflow
-- Create a new repository based on cust_template
-- Add the needed parameters into deployment_config.yml
-- Run the CI/CD for the deploy content (rules, playbooks, workbooks etc)
-
-### Rule deployment logic: 
-1. Reads all rules from mdr_root and creates a list of them
+## Rule deployment logic: 
+1. Reads all rules from mdr_root repository and creates a list of them
 2. Uses deployment_config.yml to exclude rules explicitly based on the `ExcludeRules` key
-3. Looks through the current rule being considered and checks for connector deployment status - If a rule is missing one of the connectors listed in the rules requirements it is excluded from the current list.
-    <span style="color:red">TODO: Some connectors write to the same table - and a rule might therefore run even if the connector is not listed. Consider adding connector groupins to cover this. Another approach is also to create rule overrides for these scenarios. Less overhead now, but no overhead once created </span>
-4. Furthermore the current rule being considered is compared on ID with the existing YAML files within /customer/artifacts/*.y*ml. If there is a rule with matching ID - the customer specific one takes precedence. 
-5. A workflow to automatically delete rules from the customer's tenant is being implemented and should run automatically
+3. Looks through the current rule (in the loop logic) and checks for connector deployment status - If a rule is missing one of the connectors listed in the rules requirements it is excluded from the current list.
+4. Furthermore the current rule being considered is compared on ID with the existing YAML files within `/customer/artifacts/rules/*.y*ml`. If there is a rule with matching ID - the customer specific one takes precedence. 
+5. A workflow to automatically delete rules from the customer's tenant is _being implemented_ and should run automatically
 
 Operational notes:
-- To `Add` a rule to all customers, do so in the mdr_root `artifacts` folder in the wanted location. 
+- To `Add` a rule to all customers, do so in the mdr_root `artifacts/rules` folder in the wanted location. 
 - To `exclude` a rule from mdr_root to specific customer, add it to `deployment_config.yml`
 - To `override` a rule we add the rule we want to override (simply copy and paste) into the customers artifacts folder - **Keep the original ID**. The ID match is used in the logic to override.
 - To `delete` a rule (IN PROGRESS) simply delete the rule:
   - For customer specific - delete in customer repository
   - For all customer - in mdr_root repository
+  - The procedure (end result) is that the rule is removed from the customer tenant and the rule is added to the `DeletedRules` in the `deployment_config.yml` file. This is used to keep track of deleted rules and may be used for future reconsiderations. But the real deletion happens with a github action that runs on a schedule and deletes the rules from the customer tenant.
 
 
-## Rule additions
-Automatic workflow for adding rules from Azure Github repository should preferrably be done via a simple GUI that let's us keep an overview of all active, deployed, deleted, overriden, excluded etc rules for all customers. 
+---
 
-Wanted functionality:
-- Do a git pull for all customers by prompting
-	- limited git pull - 13k?
-	- Maybe even limited to the Solutions folder also to avoid duplicates.
-- Scan folders on opening the application for all rules
-- All analysts have their own workspace setup (folder structure wise). So a few options to detect customers:
-    - Scan iteratively from a given location for `deployment_config.yml` file to decide if the current scanned location is a customer
-    - Add that customer root folder as an input to the application
-    - Overview of customers could default to a list within a config file for the application.
-      - Default to recursively from one level above.
-- When all customer locations has been found - scan them for rules (artifacts folder), excluded rules in the deployment config file, Deleted files may be commented in the `DeletedRules` in the deployment config file. This list is optionally kept there and may serve as input to why rule is not present at customer. Helps for future reconsiderations. 
-- Pagination
+# Azure Lighthouse-based deployment (MDR tenant delegated access)
 
-*Getting rules from Azure Repository Locally*
-The application is a simple "moving files" type of application. It should scan for y*ml files in a given path recursively. If there are any findings, add it to the list and get these fields out from the YAML file:
-- Name
-- ID
-- MITRE (Both techniques and tactics)
-- Connectors and tables
-- Type (and calculate if the type is not there if it is a hunting rule)
-- Version
-- Severity
+This template now deploys Sentinel rules to a customer using Azure Lighthouse. The workflow authenticates with a service principal in the MDR tenant and performs deployments under delegated access to the customer subscription.
 
-*Comparing Azure available rules with current rules*
-We should now check to see which rules we have in mdr_root and the customer specific locations.
-Each customer should have a column of their own used to set a flag for deployed, excluded, overridden etc.
-There might be rules in these repositories that are not present in the azure repo. So we should also have a root placement of the files. For overrides where there are multiple files with same ID, we know that location for that specific customer as good as we need to to find it quickly - the root location is good enough. 
+Key actions
+- Login with MDR SP, set the customer subscription via Lighthouse, load customer settings from `deployment-config.yaml` and `lighthouse/lighthouse-template.parameters.json`, then deploy rules.
 
+Prerequisites (one-time per customer)
+- Deploy Azure Lighthouse registration to the customer subscription using the template in `lighthouse/lighthouse-template.json`.
+  - Ensure `variables.managedByTenantId` matches your MDR tenant ID.
+  - In `lighthouse/lighthouse-template.parameters.json`, set:
+    - AutomationServicePrincipalID: Object ID of the MDR SP used by the workflow.
+    - AutomationServicePrincipalName: Friendly name for the SP.
+    - AnalystsGroupID, EngineersGroupID, ManagersGroupID, ReaderGroupID (and PIMApproversGroupID if used): MDR tenant group object IDs.
+    - SentinelResourceGroup and SecurityAutomationResourceGroup: target resource groups in the customer subscription.
+- The MDR SP must have at least Microsoft Sentinel Contributor (and Reader where applicable) via the Lighthouse definition.
 
+GitHub Actions configuration (per repo)
+- Secrets:
+  - MDR_AZURE_CREDENTIALS: JSON for azure/login, example:
+    ```json
+    {"clientId":"<appId>","clientSecret":"<password>","tenantId":"<mdrTenantId>"}
+    ```
+  - CUSTOMER_SUBSCRIPTION_ID: Customer subscription ID (delegated).
+  - PAT_TOKEN: Token with read access to `mdr_root`.
+- Optional repository variables (if you do not want to rely solely on config files):
+  - AZURE_RG: Customer Sentinel RG.
+  - AZURE_WORKSPACE: Customer Sentinel workspace name.
 
-# TODO
-- Add git app token based approach as this is way more safe than current test solution is:
-```yaml
-  - name: Generate GitHub App Token
-    id: app-token
-    uses: actions/create-github-app-token@v1
-    with:
-      # TODO: create the SENTINEL_MDR_WRITE_APP_ID and SENTINEL_MDR_WRITE_PRIVATE_KEY secrets
-      # and add them to the repository secrets
-      app-id: ${{ vars.SENTINEL_MDR_WRITE_APP_ID }}
-      private-key: ${{ secrets.SENTINEL_MDR_WRITE_PRIVATE_KEY }}
-      owner: ${{ github.repository_owner }}
-      repositories: |
-        mdr_root
-```
+Customer repository configuration
+- `deployment-config.yaml` (already in the repo):
+  - Settings.WorkSpace-Resource-Group: Sentinel RG name.
+  - Settings.Workspace-Name: Sentinel workspace name.
+  - Settings.Automation-Resource-Group: Optional, used for automation content later.
+- `lighthouse/lighthouse-template.parameters.json`:
+  - SentinelResourceGroup and SecurityAutomationResourceGroup: used as fallbacks to determine RGs.
+  - AutomationServicePrincipalID and group IDs: ensure they are filled prior to initial Lighthouse deployment.
+
+How the workflow uses these values
+- Login with MDR SP -> set customer subscription via Lighthouse.
+- Load settings step reads:
+  - Primary: `deployment-config.yaml` Settings (Workspace-Name, WorkSpace-Resource-Group).
+  - Fallback: `lighthouse-template.parameters.json` (SentinelResourceGroup, SecurityAutomationResourceGroup).
+  - Final fallback: discover first workspace in the RG.
+- Exports AZURE_RG and AZURE_WORKSPACE to the job environment.
+- Rule deployment uses these env vars and honors ExcludeRules/DeletedRules in `deployment-config.yaml`.
+
+New customer bootstrap steps
+1. Create repo from this template.
+2. Fill `deployment-config.yaml` Settings (Workspace-Name, WorkSpace-Resource-Group).
+3. Fill `lighthouse/lighthouse-template.parameters.json` with RG names, MDR SP object ID, and MDR group IDs.
+4. Deploy Lighthouse template to the customer subscription (one-time).
+5. Add GitHub secrets: MDR_AZURE_CREDENTIALS, CUSTOMER_SUBSCRIPTION_ID, PAT_TOKEN.
+6. Optionally add variables: AZURE_RG, AZURE_WORKSPACE (if not in config files).
+7. Run the "Deploy Rules" workflow (manually via Workflow Dispatch or on push to master while testing).
+
+Troubleshooting
+- Missing delegated access: Ensure Lighthouse assignment exists and MDR SP/object IDs are correct.
+- Workspace not found: Verify Settings in `deployment-config.yaml` or set AZURE_RG/AZURE_WORKSPACE variables.
+- 403 errors from az rest: Check that MDR SP is granted Microsoft Sentinel Contributor via Lighthouse.
