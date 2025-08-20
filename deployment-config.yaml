@@ -12,5 +12,8 @@ Connectors:
       - id: AADNonInteractiveUserSignInLogs
         enabled: true
         comment: "Optional comment"
+ExcludeRules:
+  - id: 56149794-3ebd-4130-8fd5-5d3c9932ea8d
+    comment: "This rule is excluded from deployment"
 
 

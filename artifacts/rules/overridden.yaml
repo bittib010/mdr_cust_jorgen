@@ -1,0 +1,40 @@
+id: dbc82bd4-c7df-44e3-838a-5846a313cf35
+name: User Accousadsadadwqdqnts - Blocked Accodqwdunts
+description: |
+  'An account could be blocked/locked out due to multiple reasons. This hunting query summarize blocked/lockout accounts and checks if most recent signin events for them is after last blocked accounts
+  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-successful-unusual-sign-ins'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+tags:
+  - AADSecOpsGuide
+query: |
+  let starttime = totimespan('{{StartTimeISO}}');
+  let endtime = totimespan('{{EndTimeISO}}');
+  let lookback = starttime - 7d;
+  let isGUID = "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}";
+  let aadFunc = (tableName:string){
+    table(tableName)
+    | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+    | where not(Identity matches regex isGUID)
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  let blocked_users = 
+  union isfuzzy=true aadSignin, aadNonInt 
+  // Blocked or locked account due to failed attempts for various reasons.
+  | where ResultType != "0"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
