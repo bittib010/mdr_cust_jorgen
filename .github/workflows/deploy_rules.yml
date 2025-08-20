@@ -209,11 +209,10 @@ jobs:
 
           Import-Module powershell-yaml -ErrorAction Stop
 
-          Write-Information "Ensuring Azure CLI Sentinel extension is installed..."
+          Write-Information "Configuring Azure CLI and ensuring Sentinel extension is installed..."
+          az config set extension.use_dynamic_install=yes_without_prompt --only-show-errors | Out-Null
+          az extension add --name sentinel --upgrade --yes --only-show-errors | Out-Null
           az extension show --name sentinel --only-show-errors | Out-Null
-          if ($LASTEXITCODE -ne 0) {
-            az extension add --name sentinel --yes --only-show-errors | Out-Null
-          }
 
           $configPath = "${{ github.workspace }}/mdr_cust/deployment-config.yaml"
           if (-not (Test-Path $configPath)) {
