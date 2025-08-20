@@ -16,6 +16,7 @@ relevantTechniques:
   - T1078
 tags:
   - AADSecOpsGuide
+kind: Scheduled
 query: |
   let starttime = totimespan('{{StartTimeISO}}');
   let endtime = totimespan('{{EndTimeISO}}');
