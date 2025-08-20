@@ -16,6 +16,7 @@ Operational notes:
   - For customer specific - delete in customer repository
   - For all customer - in mdr_root repository
   - The procedure (end result) is that the rule is removed from the customer tenant and the rule is added to the `DeletedRules` in the `deployment_config.yml` file. This is used to keep track of deleted rules and may be used for future reconsiderations. But the real deletion happens with a github action that runs on a schedule and deletes the rules from the customer tenant.
+- TODO: Add connector check logis!!!
 
 
 ---
