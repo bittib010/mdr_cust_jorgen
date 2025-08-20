@@ -70,7 +70,7 @@
   "variables": {
     "mspOfferName": "Root MDR",
     "mspOfferDescription": "Root MDR Security Monitoring service.",
-    "managedByTenantId": "4446df3c-2113-4ef6-ae19-982713f574cb",
+    "managedByTenantId": "abf67dae-9a43-4bf0-aa92-151fd6a1d425",
     "groupMap": {
       "socPIMApprovers": {
         "name": "Root MDR PIM Approvers",

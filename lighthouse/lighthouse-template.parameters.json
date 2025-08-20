@@ -3,22 +3,22 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "AnalystsGroupID": {
-            "value": "5eb6b03c-e136-4f34-a788-c0bdd7576091"
+            "value": "d8ac12ef-22a8-48ca-82aa-d006dff7714e"
         },
         "AutomationServicePrincipalID": {
-            "value": "d994e00b-fc92-431e-ace4-73e7801025ce" 
+            "value": "87e796b6-7f92-46bc-a337-b66141812055" 
         },
         "AutomationServicePrincipalName": {
             "value": "testlab-prod-securityautomation-sp"
         },
         "EngineersGroupID": {
-            "value": "6cf8c750-39d6-43b8-9ad7-7021380781a1"
+            "value": "ce2b90f0-f391-4dd6-87aa-feaaf5ea33be"
         },
         "ManagersGroupID": {
-            "value": "85bea3c0-d2bc-4c66-b99b-c5d2fee68870"
+            "value": "2178c808-e940-419b-9ccd-8f869d64c028"
         },
         "ReaderGroupID": {
-            "value": "c6be5c47-afad-4a22-98db-6aa5ab8a99ef"
+            "value": "c7c804c3-ce50-4f58-abb9-763e95a0e9b3"
         },
         "SentinelResourceGroup": {
             "value": "testlab-prod-weu-mon-rg"
