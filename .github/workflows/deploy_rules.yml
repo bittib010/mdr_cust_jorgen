@@ -32,7 +32,7 @@ jobs:
           private-key: ${{ secrets.SENTINEL_MDR_READ_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: |
-            mdr_root
+            testlab-adrian/mdr_root
 
       - name: Set up Azure CLI
         uses: azure/cli@v2
