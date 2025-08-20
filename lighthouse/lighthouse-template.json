@@ -148,7 +148,7 @@
         "roleDefinitionId": "[variables('roleMap').LogAnalyticsContributor]"
       },
       {
-        "principalId": "5bb01e0f-d73e-4d87-bec8-e74abb7f6f0a", // ObjectID of SP (Azure Security Insights) located in the Managing tenant
+        "principalId": "4d9d5c1a-3e37-40af-a1e3-eccae193594a", // ObjectID of SP (Azure Security Insights) located in the Managing tenant
         "principalIdDisplayName": "Azure Security Insights",
         "roleDefinitionId": "[variables('roleMap').MicrosoftSentinelAutomationContributor]"
       },
