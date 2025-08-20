@@ -1,51 +1,71 @@
-id: dbc82bd4-c7df-44e3-838a-5846a313cd66
-name: User Accousadsadadwqdqnts - Blocked Accodqwdunts
+id: 26cb2222-ae5d-22db-88e3-75d093584a2e
+name: User declines MFA and reports fraud
 description: |
-  'An account could be blocked/locked out due to multiple reasons. This hunting query summarize blocked/lockout accounts and checks if most recent signin events for them is after last blocked accounts
-  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-successful-unusual-sign-ins'
-requiredDataConnectors:
-  - connectorId: AzureActiveDirectory
-    dataTypes:
-      - SigninLogs
-  - connectorId: AzureActiveDirectory
-    dataTypes:
-      - AADNonInteractiveUserSignInLogs
+  Identifies occurrences where a user has rejected an MFA prompt and reported the MFA push as fraud.
+
+  This action will make the user end up on the MFA block list, disabling MFA Authentication for the user.
+severity: Medium
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
 tactics:
-  - InitialAccess
+  - CredentialAccess
 relevantTechniques:
-  - T1078
-tags:
-  - AADSecOpsGuide
-kind: Scheduled
-query: |
-  let starttime = totimespan('{{StartTimeISO}}');
-  let endtime = totimespan('{{EndTimeISO}}');
-  let lookback = starttime - 7d;
-  let isGUID = "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}";
-  let aadFunc = (tableName:string){
-    table(tableName)
-    | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
-    | where not(Identity matches regex isGUID)
+  - T1110
+query: >-
+  let aadFunc = (tableName: string) {
+      table(tableName)
+      | where ResultType == 500121
+      | where Status has "MFA denied; Phone App Reported Fraud"
+      | extend Type = Type, PublicIP = IPAddress
+      | extend
+          Name = tostring(split(UserPrincipalName, '@', 0)[0]),
+          UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
   };
   let aadSignin = aadFunc("SigninLogs");
+  let dvcInfo = DeviceInfo
+      | extend SensorHealthState = column_ifexists("SensorHealthState", "")
+      | where OnboardingStatus == "Onboarded" and SensorHealthState == "Active"
+      | project PublicIP, AadDeviceId;
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
-  let blocked_users = 
-  union isfuzzy=true aadSignin, aadNonInt 
-  // Blocked or locked account due to failed attempts for various reasons.
-  | where ResultType != "0"
-  | where ResultDescription has_any ("blocked", "locked")  or ResultType in (50053, 50131, 53003, 500121)
-  | summarize FirstBlockedAttempt = min(TimeGenerated), LastBlockedAttempt = max(TimeGenerated) by UserPrincipalName, ResultDescription, ResultType;
-  blocked_users
-  | join kind= inner (
   union isfuzzy=true aadSignin, aadNonInt
-  | where ResultType == 0
-  | summarize FirstSuccessfulSignin = min(TimeGenerated), LastSuccessfulSignin = max(TimeGenerated), make_set(IPAddress), make_set(ClientAppUsed), make_set(UserAgent), make_set(AppDisplayName) by UserPrincipalName, UserDisplayName
-  ) on UserPrincipalName
-  | where LastSuccessfulSignin > LastBlockedAttempt //Checking if successul login is after lastblockedattempts
-  | extend timestamp = LastSuccessfulSignin, AccountCustomEntity = UserPrincipalName
+  | join kind=leftouter dvcInfo on PublicIP   
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: PublicIP
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ClientAppUsed
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+# This is more of a test for starting the rule which is in preview, without documentation.
+# startTimeUtc: 2025-04-09T10:00:00.000Z
+kind: Scheduled
 version: 1.0.0

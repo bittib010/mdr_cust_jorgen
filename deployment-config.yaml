@@ -13,7 +13,7 @@ Connectors:
         enabled: true
         comment: "Optional comment"
 ExcludeRules:
-  - id: 56149794-3ebd-4130-8fd5-5d3c9932ea8d
+  - id: 26cb3222-ae5d-43db-88e3-75d093584a2e
     comment: "This rule is excluded from deployment"
 
 

@@ -1,42 +1,71 @@
-id: cf83633e-5dfd-4887-993b-c910452439da
-name: Failed attempt to access Azure Portal
+id: 123b2222-ae5d-43db-88e3-75d093584a2e
+name: User declines MFA and reports fraud
 description: |
-  'Access attempts to Azure Portal from an unauthorized user. Either invalid password or the user account does not exist.'
-requiredDataConnectors:
-  - connectorId: AzureActiveDirectory
-    dataTypes:
-      - SigninLogs
+  Identifies occurrences where a user has rejected an MFA prompt and reported the MFA push as fraud.
+
+  This action will make the user end up on the MFA block list, disabling MFA Authentication for the user.
+severity: Medium
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
 tactics:
-  - InitialAccess
+  - CredentialAccess
 relevantTechniques:
-  - T1078
-query: |
-  SigninLogs
-  | where AppDisplayName contains "Azure Portal"
-  // 50126 - Invalid username or password, or invalid on-premises username or password.
-  // 50020? - The user doesn't exist in the tenant.
-  | where ResultType in ( "50126" , "50020")
-  | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
-  | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
-  | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), IPAddresses = makeset(IPAddress), DistinctIPCount = dcount(IPAddress), 
-  makeset(OS), makeset(Browser), makeset(City), AttemptCount = count() 
-  by UserDisplayName, UserPrincipalName, AppDisplayName, ResultType, ResultDescription, StatusCode, StatusDetails, Location, State
-  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName
-  | sort by AttemptCount
+  - T1110
+query: >-
+  let aadFunc = (tableName: string) {
+      table(tableName)
+      | where ResultType == 500121
+      | where Status has "MFA denied; Phone App Reported Fraud"
+      | extend Type = Type, PublicIP = IPAddress
+      | extend
+          Name = tostring(split(UserPrincipalName, '@', 0)[0]),
+          UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let dvcInfo = DeviceInfo
+      | extend SensorHealthState = column_ifexists("SensorHealthState", "")
+      | where OnboardingStatus == "Onboarded" and SensorHealthState == "Active"
+      | project PublicIP, AadDeviceId;
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
+  | join kind=leftouter dvcInfo on PublicIP   
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
       - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.0
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: PublicIP
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ClientAppUsed
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+# This is more of a test for starting the rule which is in preview, without documentation.
+# startTimeUtc: 2025-04-09T10:00:00.000Z
 kind: Scheduled
-metadata:
-    source:
-        kind: Community
-    author:
-        name: Shain
-    support:
-        tier: Community
-    categories:
-        domains: [ "Security - Other", "Identity" ]
+version: 1.0.0
