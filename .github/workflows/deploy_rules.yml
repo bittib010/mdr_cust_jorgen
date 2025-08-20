@@ -35,6 +35,28 @@ jobs:
           repositories: |
             mdr_root
 
+      - name: Install PowerShell Modules
+        id: install-modules
+        shell: pwsh
+        run: |
+          $InformationPreference = 'Continue'
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          try {
+            $modulesToInstall = @(
+              'powershell-yaml'
+            )
+            $modulesToInstall | ForEach-Object {
+              if (-not (Get-Module -Name $_ -ListAvailable)) {
+                Write-Information -MessageData "Module [$_] not found, installing it..."
+                Install-Module -Name $_ -ErrorAction Stop
+              }
+            }
+          } catch {
+            Write-Error -Message "Failed to install module [$_]."
+            exit 1
+          }
+    
+
       - name: Set up Azure CLI
         uses: azure/cli@v2
         with:
@@ -177,3 +199,5 @@ jobs:
           }
           
           $csvLines | Out-File -FilePath $csvPath -Encoding utf8
+
+
