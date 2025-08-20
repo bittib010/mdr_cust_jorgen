@@ -54,11 +54,12 @@ jobs:
         with: 
           path: mdr_cust
 
-      # New: Authenticate with MDR tenant SP (will use Azure Lighthouse delegated access to target the customer subscription)
-      - name: Azure login (MDR tenant via Lighthouse delegation)
+      - name: Azure login
         uses: azure/login@v2
         with:
-          creds: ${{ env.MDR_AZURE_CREDENTIALS }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set target subscription (customer via Lighthouse)
         shell: bash
@@ -264,15 +265,6 @@ jobs:
           }
           
           $csvLines | Out-File -FilePath $csvPath -Encoding utf8
-
-      # OLD: Deploy selected rules to the customer's Sentinel workspace (direct customer SP login)
-      # - name: Deploy Sentinel rules
-      #   shell: pwsh
-      #   run: |
-      #     Import-Module powershell-yaml -ErrorAction Stop
-      #     # ...existing code...
-      #     # Old direct deployment via az rest using customer-tenant service principal
-      #     # ...existing code...
 
       # New: Deploy selected rules via Azure Lighthouse delegated access using Innofactor-MDR module
       - name: Deploy content (Innofactor-MDR via Lighthouse)
