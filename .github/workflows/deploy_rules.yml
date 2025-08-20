@@ -302,10 +302,10 @@ jobs:
             try {
               if ($exists) {
                 Write-Host "Updating rule $ruleId from $relativePath"
-                az sentinel alert-rule update --resource-group $resourceGroup --workspace-name $workspaceName --rule-name $ruleId $kindParam "@${fullPath}" --only-show-errors | Out-Null
+                az sentinel alert-rule update --resource-group $resourceGroup --workspace-name $workspaceName --rule-id $ruleId $kindParam "@${fullPath}" --only-show-errors | Out-Null
               } else {
                 Write-Host "Creating rule $ruleId from $relativePath"
-                az sentinel alert-rule create --resource-group $resourceGroup --workspace-name $workspaceName --rule-name $ruleId $kindParam "@${fullPath}" --only-show-errors | Out-Null
+                az sentinel alert-rule create --resource-group $resourceGroup --workspace-name $workspaceName --rule-id $ruleId $kindParam "@${fullPath}" --only-show-errors | Out-Null
               }
             } catch {
               Write-Warning "Failed to deploy rule $ruleId ($relativePath). Error: $($_.Exception.Message)"
