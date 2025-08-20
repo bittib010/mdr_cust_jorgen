@@ -1,7 +1,7 @@
 Settings:
   CustomerName: Adrian
   Location: westeurope
-  Workspace-Name: contoso-prod-weu-law
+  Workspace-Name: testlab-prod-weu-law
   WorkSpace-Resource-Group: testlab-prod-weu-mon-rg
   Automation-Resource-Group: testlab-prod-weu-auto-rg
   Tier: 1
