@@ -43,7 +43,8 @@ jobs:
           try {
             $modulesToInstall = @(
               'powershell-yaml',
-              'Az.Resources'
+              'Az.Resources',
+              'SentinelARConverter'
             )
             $modulesToInstall | ForEach-Object {
               if (-not (Get-Module -Name $_ -ListAvailable)) {
@@ -208,17 +209,12 @@ jobs:
           $InformationPreference = 'Continue'
 
           Import-Module powershell-yaml -ErrorAction Stop
+          Import-Module SentinelARConverter -ErrorAction Stop
 
-          Write-Information "Configuring Azure CLI and ensuring Sentinel extension is installed..."
-          az config set extension.use_dynamic_install=yes_without_prompt --only-show-errors | Out-Null
-          az extension add --name sentinel --upgrade --yes --only-show-errors | Out-Null
-          az extension show --name sentinel --only-show-errors | Out-Null
+          Write-Information "Azure CLI ready"
 
           $configPath = "${{ github.workspace }}/mdr_cust/deployment-config.yaml"
-          if (-not (Test-Path $configPath)) {
-            throw "Missing deployment config at $configPath"
-          }
-
+          if (-not (Test-Path $configPath)) { throw "Missing deployment config at $configPath" }
           $config = (Get-Content -Raw -Path $configPath) | ConvertFrom-Yaml
           $resourceGroup = $config.Settings.'WorkSpace-Resource-Group'
           $workspaceName = $config.Settings.'Workspace-Name'
@@ -228,9 +224,7 @@ jobs:
           }
 
           $csvPath = "${{ github.workspace }}/content.csv"
-          if (-not (Test-Path $csvPath)) {
-            throw "content.csv not found. Ensure previous steps generated it."
-          }
+          if (-not (Test-Path $csvPath)) { throw "content.csv not found. Ensure previous steps generated it." }
 
           function Resolve-RulePath {
             param([string]$relativePath)
@@ -241,27 +235,17 @@ jobs:
             return $null
           }
 
-          function Get-RuleKindParam {
+          function Is-DeployableAlertRule {
             param([hashtable]$yaml, [string]$filePath)
             $kind = $yaml.kind
             if (-not $kind) {
               if ($yaml.query -and ($yaml.severity -or $yaml.queryFrequency -or $yaml.triggerOperator -or $yaml.suppressionDuration)) {
-                $kind = 'Scheduled'
-              } elseif ($filePath -match '/rules/hunting/' -or ($yaml.query -and -not $yaml.severity)) {
-                return $null  # Hunting query; skip
-              } else {
-                $kind = 'Scheduled'
+                return $true
               }
+              if ($filePath -match '/rules/hunting/' -or ($yaml.query -and -not $yaml.severity)) { return $false }
+              return $true
             }
-            switch ($kind.ToString().ToLower()) {
-              'scheduled'           { return '--scheduled' }
-              'nrt'                 { return '--nrt' }
-              'fusion'              { return '--fusion' }
-              'mssecurityincident'  { return '--ms-security-incident' }
-              'threatintelligence'  { return '--threat-intelligence' }
-              'mlbehavioranalytics' { return '--ml-behavior-analytics' }
-              default               { return '--scheduled' }
-            }
+            return ($kind -in @('Scheduled','NRT','Fusion','MicrosoftSecurityIncidentCreation','ThreatIntelligence','MLBehaviorAnalytics'))
           }
 
           $lines = Get-Content -Path $csvPath | Select-Object -Skip 1
@@ -271,43 +255,32 @@ jobs:
             $ruleId = $matches[2]
 
             $fullPath = Resolve-RulePath -relativePath $relativePath
-            if (-not $fullPath) {
-              Write-Warning "File not found for relative path: $relativePath. Skipping."
-              continue
-            }
+            if (-not $fullPath) { Write-Warning "File not found for relative path: $relativePath. Skipping."; continue }
 
             try {
-              $yamlText = Get-Content -Raw -Path $fullPath
-              $yaml = $yamlText | ConvertFrom-Yaml
-            } catch {
-              Write-Warning "Failed to parse YAML for $fullPath. Skipping."
-              continue
-            }
+              $yaml = Get-Content -Raw -Path $fullPath | ConvertFrom-Yaml
+            } catch { Write-Warning "Failed to parse YAML for $fullPath. Skipping."; continue }
 
-            $kindParam = Get-RuleKindParam -yaml $yaml -filePath $fullPath
-            if (-not $kindParam) {
-              Write-Host "Skipping non-alert rule (likely hunting query): $relativePath"
-              continue
+            if (-not (Is-DeployableAlertRule -yaml $yaml -filePath $fullPath)) {
+              Write-Host "Skipping non-alert rule (likely hunting query): $relativePath"; continue
             }
 
             if (-not $ruleId -and $yaml.id) { $ruleId = $yaml.id }
-            if (-not $ruleId) {
-              Write-Warning "No rule id found for $relativePath. Skipping."
-              continue
+            if (-not $ruleId) { Write-Warning "No rule id found for $relativePath. Skipping."; continue }
+
+            # Convert YAML -> ARM template to deploy
+            $tmpJson = Join-Path $env:RUNNER_TEMP ("$ruleId.json")
+            try {
+              Convert-SentinelARYamlToArm -Filename $fullPath -OutFile $tmpJson | Out-Null
+            } catch {
+              Write-Warning "Failed to convert YAML to ARM for $relativePath. Error: $($_.Exception.Message)"; continue
             }
 
-            az sentinel alert-rule show --resource-group $resourceGroup --workspace-name $workspaceName --rule-name $ruleId --only-show-errors | Out-Null
-            $exists = ($LASTEXITCODE -eq 0)
-
+            # Deploy ARM template into the resource group with workspace as parameter
             try {
-              if ($exists) {
-                Write-Host "Updating rule $ruleId from $relativePath"
-                az sentinel alert-rule update --resource-group $resourceGroup --workspace-name $workspaceName --rule-id $ruleId $kindParam "@${fullPath}" --only-show-errors | Out-Null
-              } else {
-                Write-Host "Creating rule $ruleId from $relativePath"
-                az sentinel alert-rule create --resource-group $resourceGroup --workspace-name $workspaceName --rule-id $ruleId $kindParam "@${fullPath}" --only-show-errors | Out-Null
-              }
+              Write-Host "Deploying rule $ruleId from $relativePath via ARM template"
+              az deployment group create --resource-group $resourceGroup --mode Incremental --name "deploy-${ruleId}" --template-file "$tmpJson" --parameters workspace="$workspaceName" --only-show-errors 1>$null
             } catch {
-              Write-Warning "Failed to deploy rule $ruleId ($relativePath). Error: $($_.Exception.Message)"
+              Write-Warning "Failed to deploy ARM for $ruleId ($relativePath). Error: $($_.Exception.Message)"
             }
           }
