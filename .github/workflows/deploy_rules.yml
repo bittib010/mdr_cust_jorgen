@@ -30,7 +30,7 @@ jobs:
         with:
           app-id: ${{ vars.SENTINEL_MDR_READ_APP_ID }}
           private-key: ${{ secrets.SENTINEL_MDR_READ_PRIVATE_KEY }}
-          owner: testlab-adrian # ${{ github.repository_owner }}
+          owner: ${{ github.repository_owner }}
           repositories: |
             mdr_root
 
@@ -43,7 +43,7 @@ jobs:
       - name: Checkout mdr_root repository
         uses: actions/checkout@v5  
         with:
-          repository: testlab-adrian/mdr_root
+          repository: ${{ github.repository_owner }}/mdr_root
           path: mdr_root
           token: ${{ steps.app-token.outputs.token }}
 
