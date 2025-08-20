@@ -1,9 +1,9 @@
 Settings:
   CustomerName: Adrian
   Location: westeurope
-  Workspace-Name: p-sec-mon-testlab-ws
-  WorkSpace-Resource-Group: p-sec-mon
-  Automation-Resource-Group: p-sec-auto
+  Workspace-Name: contoso-prod-weu-law
+  WorkSpace-Resource-Group: testlab-prod-weu-mon-rg
+  Automation-Resource-Group: testlab-prod-weu-auto-rg
   Tier: 1
 Connectors:
       - id: AzureActiveDirectory
