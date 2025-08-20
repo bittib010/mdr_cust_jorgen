@@ -18,12 +18,13 @@ permissions:
 
 jobs:
   initialize:
+    
+    environment: production-unlocked
     runs-on: ubuntu-latest
     env:
       CUSTOMER_SUBSCRIPTION_ID: ${{ secrets.CUSTOMER_SUBSCRIPTION_ID }}
       MDR_AZURE_CREDENTIALS: ${{ secrets.MDR_AZURE_CREDENTIALS }}
     steps:
-
       - name: Generate GitHub App Token
         id: app-token
         uses: actions/create-github-app-token@v2
