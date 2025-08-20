@@ -26,7 +26,7 @@ jobs:
       - name: Checkout mdr_root repository
         uses: actions/checkout@v5  
         with:
-          repository: bittib010/mdr_root
+          repository: testlab-adrian/mdr_root
           token: ${{ secrets.PAT_TOKEN }}
           path: mdr_root
 
