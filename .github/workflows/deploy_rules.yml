@@ -2,10 +2,6 @@ name: Deploy Rules
 
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
-  push: # remove when not testing
-    branches:
-      - master
-
 
 env:
   CONFIG_FILE: deployment-config.yaml
@@ -84,6 +80,12 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+
+      - name: testing action from mdr_root
+        uses: testlab_adrian/mdr_root/.github/actions/test-action@v1
+
+
 
       # Loop the /mdr_root folders subfolder: artefacts recursively
       - name: Add base content to artefacts
