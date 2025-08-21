@@ -20,6 +20,8 @@ jobs:
       CUSTOMER_SUBSCRIPTION_ID: ${{ secrets.CUSTOMER_SUBSCRIPTION_ID }}
       MDR_AZURE_CREDENTIALS: ${{ secrets.MDR_AZURE_CREDENTIALS }}
     steps:
+      # Obtains a short-lived token for reading from the central mdr_root repository
+      # using the configured GitHub App. Required to checkout mdr_root below.
       - name: Generate GitHub App Token
         id: app-token
         uses: actions/create-github-app-token@v2
@@ -30,6 +32,10 @@ jobs:
           repositories: |
             mdr_root
 
+      # Installs required PowerShell modules for this job. We keep this here for steps
+      # that are not yet migrated to the composite actions, and to ensure modules are
+      # available globally in the job environment. The prepare_rulepaths action also
+      # performs its own check for powershell-yaml to be self-contained.
       - name: Install PowerShell Modules
         id: install-modules
         shell: pwsh
@@ -54,12 +60,14 @@ jobs:
           }
     
 
+      # Minimal Azure CLI presence for later deployments
       - name: Set up Azure CLI
         uses: azure/cli@v2
         with:
           inlineScript: |
             echo "Azure CLI setup complete." 
 
+      # Checkout the central rules library (mdr_root) into a folder named 'mdr_root'.
       - name: Checkout mdr_root repository
         uses: actions/checkout@v5  
         with:
@@ -68,12 +76,13 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
 
-      # Checkout current repository
+      # Checkout the current customer repository into 'mdr_cust'.
       - name: Checkout repository
         uses: actions/checkout@v5
         with: 
           path: mdr_cust
 
+      # Authenticate to Azure using OpenID Connect configured for this repository/environment.
       - name: Azure login
         uses: azure/login@v2
         with:
@@ -81,11 +90,6 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-
-      - name: testing action from mdr_root
-        uses: testlab-adrian/mdr_root/.github/actions/deploy_rules@v1
-        with:
-          message: "Output from customer, calling action from mdr_root repository"
 
 
       # Loop the /mdr_root folders subfolder: artefacts recursively
@@ -205,18 +209,43 @@ jobs:
           $csvLines | Out-File -FilePath $csvPath -Encoding utf8
 
 
+
+      # Deprecated inline steps for building content.csv are being replaced by the
+      # new composite action below. Keeping comments to document the transition:
+      #  - Previously we seeded from mdr_root, then overlaid mdr_cust and applied exclusions
+      #  - The same logic is now encapsulated in .github/actions/prepare_rulepaths in mdr_root
+
+      # New step: call the centralized composite action that prepares the rule paths CSV.
+      # It accepts inputs to locate the two checkouts and the deployment-config file,
+      # and writes the resulting CSV to the workspace as content.csv by default.
+      - name: Prepare Rule Paths (demo)
+        uses: testlab-adrian/mdr_root/.github/actions/prepare_rulepaths@v1
+        with:
+          # Folder names under $GITHUB_WORKSPACE where the repos are checked out
+          ROOT_DIR: mdr_root
+          CUST_DIR: mdr_cust
+          # The customer deployment config path relative to CUST_DIR
+          CONFIG_FILE: ${{ env.CONFIG_FILE }}
+          # Destination CSV name under $GITHUB_WORKSPACE
+          OUTPUT_CSV: content.csv
+
+      # The remaining deployment logic still relies on content.csv and proceeds to convert
+      # and deploy the rules. Once more logic is migrated to actions, these steps can be
+      # simplified further.
       - name: Deploy Rules
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $InformationPreference = 'Continue'
 
+          # Import modules required for conversion and YAML handling
           Import-Module powershell-yaml -ErrorAction Stop
           Import-Module SentinelARConverter -ErrorAction Stop
 
           Write-Information "Azure CLI ready"
 
-          $configPath = "${{ github.workspace }}/mdr_cust/deployment-config.yaml"
+          # Read required deployment settings from customer config
+          $configPath = "${{ github.workspace }}/mdr_cust/${{ env.CONFIG_FILE }}"
           if (-not (Test-Path $configPath)) { throw "Missing deployment config at $configPath" }
           $config = (Get-Content -Raw -Path $configPath) | ConvertFrom-Yaml
           $resourceGroup = $config.Settings.'WorkSpace-Resource-Group'
@@ -226,9 +255,11 @@ jobs:
             throw "deployment-config.yaml must include Settings -> WorkSpace-Resource-Group and Workspace-Name"
           }
 
+          # Use the CSV produced by the Prepare Rule Paths action
           $csvPath = "${{ github.workspace }}/content.csv"
           if (-not (Test-Path $csvPath)) { throw "content.csv not found. Ensure previous steps generated it." }
 
+          # Helper: resolve a relative rule path to the concrete file in either mdr_cust or mdr_root
           function Resolve-RulePath {
             param([string]$relativePath)
             $custPath = Join-Path "${{ github.workspace }}/mdr_cust" $relativePath
@@ -238,6 +269,7 @@ jobs:
             return $null
           }
 
+          # Helper: decide if a YAML file represents a deployable alert rule
           function Is-DeployableAlertRule {
             param([hashtable]$yaml, [string]$filePath)
             $kind = $yaml.kind
@@ -251,6 +283,7 @@ jobs:
             return ($kind -in @('Scheduled','NRT','Fusion','MicrosoftSecurityIncidentCreation','ThreatIntelligence','MLBehaviorAnalytics'))
           }
 
+          # Iterate the produced CSV and deploy eligible rules
           $lines = Get-Content -Path $csvPath | Select-Object -Skip 1
           foreach ($line in $lines) {
             if (-not ($line -match '^(.*?),(.*)$')) { continue }
