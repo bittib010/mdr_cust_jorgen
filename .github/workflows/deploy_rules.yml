@@ -83,7 +83,7 @@ jobs:
 
 
       - name: testing action from mdr_root
-        uses: testlab-adrian/mdr_root/.github/actions/deploy_rules@master
+        uses: testlab-adrian/mdr_root/.github/actions/deploy_rules@v1
         with:
           message: "Output from customer, calling action from mdr_root repository"
 
