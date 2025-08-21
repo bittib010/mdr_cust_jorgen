@@ -219,7 +219,7 @@ jobs:
       # It accepts inputs to locate the two checkouts and the deployment-config file,
       # and writes the resulting CSV to the workspace as content.csv by default.
       - name: Prepare Rule Paths (demo)
-        uses: testlab-adrian/mdr_root/.github/actions/prepare_rulepaths@v1
+        uses: testlab-adrian/mdr_root/.github/actions/prepare_rulepaths@v2
         with:
           # Folder names under $GITHUB_WORKSPACE where the repos are checked out
           ROOT_DIR: mdr_root
