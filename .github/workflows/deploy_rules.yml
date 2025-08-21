@@ -83,8 +83,9 @@ jobs:
 
 
       - name: testing action from mdr_root
-        uses: testlab_adrian/mdr_root/.github/actions/test-action@v1
-
+        uses: testlab_adrian/mdr_root/.github/actions/deploy_rules
+        with:
+          message: "Output from customer, calling action from mdr_root repository"
 
 
       # Loop the /mdr_root folders subfolder: artefacts recursively
