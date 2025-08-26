@@ -31,6 +31,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: |
             mdr_root
+            mdr_ruleconverter
 
       # Installs required PowerShell modules for this job. We keep this here for steps
       # that are not yet migrated to the composite actions, and to ensure modules are
@@ -192,4 +193,94 @@ jobs:
             } catch {
               Write-Warning "Failed to deploy ARM for $ruleId ($relativePath). Error: $($_.Exception.Message)"
             }
+          }
+
+      - name: Deploy Rules with mdr_ruleconverter
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $InformationPreference = 'Continue'
+
+          # Ensure YAML parsing available
+          Import-Module powershell-yaml -ErrorAction Stop
+
+          # Paths
+          $workspaceRoot = "${{ github.workspace }}"
+          $csvPath = Join-Path $workspaceRoot 'content.csv'
+          if (-not (Test-Path $csvPath)) { throw "content.csv not found. Ensure 'Prepare Rule Paths' step ran." }
+
+          # Read config for RG and Workspace
+          $configPath = Join-Path $workspaceRoot "mdr_cust/${{ env.CONFIG_FILE }}"
+          if (-not (Test-Path $configPath)) { throw "Missing deployment config at $configPath" }
+          $config = (Get-Content -Raw -Path $configPath) | ConvertFrom-Yaml
+          $resourceGroup = $config.Settings.'WorkSpace-Resource-Group'
+          $workspaceName = $config.Settings.'Workspace-Name'
+          if (-not $resourceGroup -or -not $workspaceName) {
+            throw "deployment-config.yaml must include Settings -> WorkSpace-Resource-Group and Workspace-Name"
+          }
+
+          # Locate and import the YamlToArm module from mdr_ruleconverter
+          $modulePath = Join-Path $workspaceRoot 'mdr_ruleconverter/Modules/YamlToArm.psm1'
+          if (-not (Test-Path $modulePath)) { throw "YamlToArm module not found at $modulePath" }
+          Import-Module -Name $modulePath -Force -ErrorAction Stop
+
+          # Resolve paths helper
+          function Resolve-RulePath {
+            param([string]$relativePath)
+            $custPath = Join-Path "$workspaceRoot/mdr_cust" $relativePath
+            $rootPath = Join-Path "$workspaceRoot/mdr_root" $relativePath
+            if (Test-Path $custPath) { return $custPath }
+            if (Test-Path $rootPath) { return $rootPath }
+            return $null
+          }
+
+          # Stage the selected files into a temp folder
+          $stagingDir = Join-Path $env:RUNNER_TEMP 'mdr_ruleconverter_input'
+          if (Test-Path $stagingDir) { Remove-Item -Recurse -Force $stagingDir }
+          $null = New-Item -ItemType Directory -Path $stagingDir -Force
+
+          $lines = Get-Content -Path $csvPath | Select-Object -Skip 1
+          $added = 0
+          foreach ($line in $lines) {
+            if (-not ($line -match '^(.*?),(.*)$')) { continue }
+            $relativePath = $matches[1]
+            $fullPath = Resolve-RulePath -relativePath $relativePath
+            if (-not $fullPath) { Write-Warning "File not found for relative path: $relativePath. Skipping."; continue }
+
+            $destDir = Join-Path $stagingDir (Split-Path -Path $relativePath -Parent)
+            $null = New-Item -ItemType Directory -Path $destDir -Force
+            Copy-Item -LiteralPath $fullPath -Destination (Join-Path $destDir (Split-Path -Leaf $fullPath)) -Force
+            $added++
+          }
+
+          if ($added -eq 0) { Write-Host 'No files to convert. Skipping.'; exit 0 }
+
+          # Prepare output location for ARM template(s)
+          $outDir = Join-Path $env:RUNNER_TEMP 'mdr_ruleconverter_output'
+          $null = New-Item -ItemType Directory -Path $outDir -Force
+          $outFile = Join-Path $outDir 'armTemplate.json'
+
+          # Determine workspace location (fallback to westeurope)
+          $workspaceLocation = ''
+          try { $workspaceLocation = (az monitor log-analytics workspace show --resource-group $resourceGroup --workspace-name $workspaceName --query location -o tsv 2>$null).Trim() } catch {}
+          if (-not $workspaceLocation) { $workspaceLocation = 'westeurope' }
+
+          Write-Host "Building ARM template(s) with mdr_ruleconverter from $stagingDir"
+          Merge-ContentTemplate -InputFolder $stagingDir -OutputFile $outFile -Workspace $workspaceName -Location $workspaceLocation
+
+          # Deploy one or more generated ARM template chunks
+          $files = Get-ChildItem -Path $outDir -File -Filter 'armTemplate*.json' | Sort-Object Name
+          if ($files.Count -eq 0) { throw "No ARM template files created in $outDir" }
+
+          $i = 1
+          foreach ($f in $files) {
+            Write-Host "Deploying ARM template chunk $i: $($f.FullName)"
+            az deployment group create `
+              --resource-group $resourceGroup `
+              --mode Incremental `
+              --name ("deploy-mdrrc-{0}-{1}" -f (Get-Date -Format 'yyyyMMddHHmmss'), $i) `
+              --template-file "$($f.FullName)" `
+              --parameters workspace="$workspaceName" workspace-location="$workspaceLocation" `
+              --only-show-errors 1>$null
+            $i++
           }
