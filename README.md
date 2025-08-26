@@ -93,3 +93,12 @@ git tag -fa v1 -m "Move v1 to latest release"
 git push origin v1.0.0
 git push origin v1 --force
 ```
+
+# Update from template
+To update a customer repository from the template:
+```bash
+git remote add template https://github.com/bittib010/mdr_cust_template.git
+git fetch --all
+git switch --create template-changes
+git merge template/master --strategy-option patience --allow-unrelated-histories
+```
