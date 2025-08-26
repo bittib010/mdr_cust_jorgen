@@ -234,53 +234,46 @@ jobs:
             return $null
           }
 
-          # Stage the selected files into a temp folder
-          $stagingDir = Join-Path $env:RUNNER_TEMP 'mdr_ruleconverter_input'
-          if (Test-Path $stagingDir) { Remove-Item -Recurse -Force $stagingDir }
-          $null = New-Item -ItemType Directory -Path $stagingDir -Force
-
-          $lines = Get-Content -Path $csvPath | Select-Object -Skip 1
-          $added = 0
-          foreach ($line in $lines) {
-            if (-not ($line -match '^(.*?),(.*)$')) { continue }
-            $relativePath = $matches[1]
-            $fullPath = Resolve-RulePath -relativePath $relativePath
-            if (-not $fullPath) { Write-Warning "File not found for relative path: $relativePath. Skipping."; continue }
-
-            $destDir = Join-Path $stagingDir (Split-Path -Path $relativePath -Parent)
-            $null = New-Item -ItemType Directory -Path $destDir -Force
-            Copy-Item -LiteralPath $fullPath -Destination (Join-Path $destDir (Split-Path -Leaf $fullPath)) -Force
-            $added++
-          }
-
-          if ($added -eq 0) { Write-Host 'No files to convert. Skipping.'; exit 0 }
-
-          # Prepare output location for ARM template(s)
+          # Prepare output location for the combined ARM template
           $outDir = Join-Path $env:RUNNER_TEMP 'mdr_ruleconverter_output'
           $null = New-Item -ItemType Directory -Path $outDir -Force
           $outFile = Join-Path $outDir 'armTemplate.json'
+          if (Test-Path $outFile) { Remove-Item -LiteralPath $outFile -Force }
 
           # Determine workspace location (fallback to westeurope)
           $workspaceLocation = ''
           try { $workspaceLocation = (az monitor log-analytics workspace show --resource-group $resourceGroup --workspace-name $workspaceName --query location -o tsv 2>$null).Trim() } catch {}
           if (-not $workspaceLocation) { $workspaceLocation = 'westeurope' }
 
-          Write-Host "Building ARM template(s) with mdr_ruleconverter from $stagingDir"
-          Merge-ContentTemplate -InputFolder $stagingDir -OutputFile $outFile -Workspace $workspaceName -Location $workspaceLocation
+          Write-Host "Building ARM template with mdr_ruleconverter from filtered CSV"
 
-          # Deploy one or more generated ARM template chunks
-          $files = Get-ChildItem -Path $outDir -File -Filter 'armTemplate*.json' | Sort-Object Name
-          if ($files.Count -eq 0) { throw "No ARM template files created in $outDir" }
+          # Iterate CSV and merge each file into a single template
+          $lines = Get-Content -Path $csvPath | Select-Object -Skip 1
+          $processed = 0
+          foreach ($line in $lines) {
+            if (-not ($line -match '^(.*?),(.*)$')) { continue }
+            $relativePath = $matches[1]
 
-          $i = 1
-          foreach ($f in $files) {
-            Write-Host "Deploying ARM template chunk $i: $($f.FullName)"
-            az deployment group create `
-              --resource-group $resourceGroup `
-              --mode Incremental `
-              --name ("deploy-mdrrc-{0}-{1}" -f (Get-Date -Format 'yyyyMMddHHmmss'), $i) `
-              --template-file "$($f.FullName)" `
-              --parameters workspace="$workspaceName" workspace-location="$workspaceLocation" `
-              --only-show-errors 1>$null
-            $i++
+            $fullPath = Resolve-RulePath -relativePath $relativePath
+            if (-not $fullPath) { Write-Warning "File not found for relative path: $relativePath. Skipping."; continue }
+
+            try {
+              Merge-ContentTemplate -InputFile $fullPath -OutputFile $outFile -Workspace $workspaceName -Location $workspaceLocation
+              $processed++
+            } catch {
+              Write-Warning ("Failed to merge file: " + $relativePath + ". Error: " + $_.Exception.Message)
+            }
           }
+
+          if ($processed -eq 0) { Write-Host 'No files to convert. Skipping.'; exit 0 }
+          if (-not (Test-Path $outFile)) { throw "ARM template was not created at $outFile" }
+
+          # Deploy the generated ARM template
+          Write-Host ("Deploying combined ARM template: {0}" -f $outFile)
+          az deployment group create `
+            --resource-group $resourceGroup `
+            --mode Incremental `
+            --name ("deploy-mdrrc-{0}" -f (Get-Date -Format 'yyyyMMddHHmmss')) `
+            --template-file "$outFile" `
+            --parameters workspace="$workspaceName" workspace-location="$workspaceLocation" `
+            --only-show-errors 1>$null
