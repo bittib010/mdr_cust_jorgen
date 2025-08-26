@@ -1,0 +1,39 @@
+---
+name: Sync labels
+
+on: # yamllint disable-line rule:truthy
+  schedule:
+    - cron: "0 8 * * 1" # Every monday at 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  labels:
+    name: Sync labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.SENTINEL_MDR_READ_APP_ID }}
+          private-key: ${{ secrets.SENTINEL_MDR_READ_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            mdr_root
+
+      - name: Checkout mdr_root labels
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          repository: ${{ github.repository_owner }}/mdr_root
+          sparse-checkout: |
+            .github/issue-labels.yml
+          token: ${{ steps.app-token.outputs.token }}
+
+      - uses: EndBug/label-sync@v2
+        with:
+          config-file: .github/issue-labels.yml
+          delete-other-labels: false
