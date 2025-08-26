@@ -77,6 +77,15 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
 
+      # Checkout the mdr_ruleconverter repository to access the YamlToArm module
+      - name: Checkout mdr_ruleconverter repository
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository_owner }}/mdr_ruleconverter
+          path: mdr_ruleconverter
+          token: ${{ steps.app-token.outputs.token }}
+
+
       # Checkout the current customer repository into 'mdr_cust'.
       - name: Checkout repository
         uses: actions/checkout@v5
