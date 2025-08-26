@@ -81,3 +81,15 @@ Troubleshooting
 - Missing delegated access: Ensure Lighthouse assignment exists and MDR SP/object IDs are correct.
 - Workspace not found: Verify Settings in `deployment-config.yaml` or set AZURE_RG/AZURE_WORKSPACE variables.
 - 403 errors from az rest: Check that MDR SP is granted Microsoft Sentinel Contributor via Lighthouse.
+
+
+
+# Tagging/relase issues
+## Move to the lastest version of the action
+```bash
+git pull
+git tag -a v1.0.0 -m "message"
+git tag -fa v1 -m "Move v1 to latest release"
+git push origin v1.0.0
+git push origin v1 --force
+```
